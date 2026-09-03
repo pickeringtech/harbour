@@ -4,5 +4,6 @@
 /.phpstan.cache/
 /build/
 /coverage/
+/node_modules/
 /vendor/
 .phpunit.result.cache

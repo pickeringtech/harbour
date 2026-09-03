@@ -1,5 +1,3 @@
-<!-- Generated from README.template.md by `npm run readme:render`. Do not edit directly. -->
-
 # Harbour
 
 **Lightweight isolated Laravel environments for parallel development.**
@@ -13,8 +11,30 @@ can stay shared. Harbour allocates workspace ports, creates a database,
 namespaces Laravel's mutable state, renders `.env`, and remembers exactly what
 it owns so teardown is safe.
 
-<!-- Diagram source: README.template.md#shared-infrastructure -->
-![Without Harbour, each worktree runs a full stack. With Harbour, native worktrees use isolated namespaces on shared infrastructure.](docs/images/readme/shared-infrastructure.svg)
+<!-- harbour:diagram id="shared-infrastructure" alt="Without Harbour, each worktree runs a full stack. With Harbour, native worktrees use isolated namespaces on shared infrastructure." -->
+```mermaid
+flowchart LR
+    accTitle: Harbour shared-infrastructure model
+    accDescr: Without Harbour, every worktree runs a complete Sail stack. With Harbour, native PHP and Node worktrees connect through isolated namespaces to shared PostgreSQL, Redis, and Mailpit services.
+
+    subgraph without[Without Harbour]
+        direction TB
+        WA[worktree-a] --> SA[full Sail stack]
+        WB[worktree-b] --> SB[full Sail stack]
+        WC[worktree-c] --> SC[full Sail stack]
+    end
+
+    subgraph with[With Harbour]
+        direction TB
+        shared[Shared infrastructure<br/>PostgreSQL · Redis · Mailpit]
+        shared --> namespaces[Workspace-isolated databases,<br/>prefixes, queues, sessions, and ports]
+        namespaces --> HA[worktree-a<br/>native PHP + Node]
+        namespaces --> HB[worktree-b<br/>native PHP + Node]
+        namespaces --> HC[worktree-c<br/>native PHP + Node]
+    end
+
+    SC ~~~ shared
+```
 
 Harbour is not anti-Sail. It is for the high-density case where running an
 entire application stack for every worktree costs more than the isolation it

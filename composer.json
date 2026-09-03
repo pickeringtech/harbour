@@ -62,6 +62,11 @@
         "test": "phpunit",
         "test:unit": "phpunit --testsuite=Unit",
         "test:integration": "phpunit --testsuite=Integration",
+        "fuzz": "phpunit tests/Unit/IdentifierPropertyTest.php",
+        "coverage": [
+            "phpunit --coverage-clover build/coverage.xml --coverage-text",
+            "@php tools/check-coverage.php build/coverage.xml 95"
+        ],
         "analyse": "phpstan analyse --memory-limit=1G",
         "format": "pint",
         "format:check": "pint --test",

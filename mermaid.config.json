@@ -1,0 +1,6 @@
+{
+    "deterministicIds": true,
+    "deterministicIDSeed": "harbour-readme",
+    "fontFamily": "ui-sans-serif, system-ui, sans-serif",
+    "theme": "neutral"
+}

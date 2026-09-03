@@ -1,5 +1,3 @@
-<!-- Generated from docs/architecture.template.md by `npm run readme:render`. Do not edit directly. -->
-
 # Harbour architecture
 
 Harbour is a Laravel package that turns the current checkout into an isolated
@@ -13,8 +11,23 @@ is necessary.
 The public entry points are thin Artisan commands and the injectable
 `WorkspaceManager`. The manager coordinates focused domain services:
 
-<!-- Diagram source: docs/architecture.template.md#components -->
-![Harbour's Artisan and programmatic APIs coordinate focused identity, state, variable, database, environment, Docker, and Compose services through WorkspaceManager.](images/architecture/components.svg)
+<!-- harbour:diagram id="components" alt="Harbour's Artisan and programmatic APIs coordinate focused identity, state, variable, database, environment, Docker, and Compose services through WorkspaceManager." -->
+```mermaid
+flowchart TB
+    accTitle: Harbour component boundaries
+    accDescr: Artisan commands and application code call WorkspaceManager, which coordinates identity, state, variable, database, and resource services. Variables feed environment rendering, databases use PDO, and resources use Docker or Compose.
+
+    entry[Artisan commands and application code] --> manager[WorkspaceManager]
+    manager --> identity[Identity]
+    manager --> state[State]
+    manager --> variables[Variables]
+    manager --> databases[Databases]
+    manager --> resources[Resources]
+    variables --> environment[Environment rendering]
+    databases --> pdo[PDO]
+    resources --> docker[Docker]
+    resources --> compose[Compose]
+```
 
 The domain layer does not depend on Laravel Console. Infrastructure adapters
 may use Laravel's container, configuration repository, database manager,
@@ -35,8 +48,20 @@ under Harbour supervision.
 
 The persisted state machine is deliberately small:
 
-<!-- Diagram source: docs/architecture.template.md#lifecycle -->
-![Harbour workspace states progress from absent through preparing to ready, while failures and teardown converge safely back to absent.](images/architecture/lifecycle.svg)
+<!-- harbour:diagram id="lifecycle" alt="Harbour workspace states progress from absent through preparing to ready, while failures and teardown converge safely back to absent." -->
+```mermaid
+stateDiagram-v2
+    accTitle: Harbour workspace lifecycle
+    accDescr: An absent workspace enters preparing and then ready. Preparing can fail. Ready or failed workspaces enter tearing down, which returns them to absent.
+
+    [*] --> absent
+    absent --> preparing: setup
+    preparing --> ready: setup succeeds
+    preparing --> failed: setup fails
+    ready --> tearing_down: teardown
+    failed --> tearing_down: teardown
+    tearing_down --> absent: cleanup succeeds
+```
 
 Every mutation is serialized by a workspace lifecycle lock. Setup writes
 `preparing` before its first external mutation and persists each allocation or

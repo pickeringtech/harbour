@@ -6,11 +6,24 @@ locking need both positive and adversarial tests.
 
 ## Development
 
+`README.md`, `docs/architecture.md`, and their diagrams are generated
+artifacts. Edit the corresponding `*.template.md` source, then render and
+verify the committed Markdown and SVGs:
+
+```bash
+npm ci
+npm run readme:render
+npm run readme:check
+```
+
 ```bash
 git clone git@github.com:pickeringtech/harbour.git
 cd harbour
 composer install
 composer test
+composer fuzz
+composer coverage
+composer mutate
 composer analyse
 composer format:check
 ```
@@ -26,7 +39,8 @@ ordinary unit runs never mutate the local Docker daemon.
 - Add an ADR for a lasting safety or architectural decision.
 - Never weaken an ownership guard to make `--force` convenient.
 - Update README/config examples and `CHANGELOG.md`.
-- Run PHPUnit, PHPStan/Larastan max, Pint, and relevant integration tests.
+- Run PHPUnit, the 95% coverage gate, mutation testing, PHPStan/Larastan max,
+  Pint, and relevant integration tests.
 
 Keep commits focused. A maintainer may ask for a security review or mutation
 test focused on safety-critical branches.

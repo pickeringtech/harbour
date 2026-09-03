@@ -17,3 +17,7 @@ All notable changes will be documented here. The format follows
 - Laravel Redis/cache/session/queue/Horizon, Vite, and Reverb variables.
 - Lifecycle events, hooks, machine-readable commands, and programmatic API.
 - Optional labelled Docker containers and isolated Compose projects.
+- Enforced 95% line coverage with service-backed coverage, property/fuzz tests,
+  and mutation-quality gates in CI.
+- Generated documentation pipeline that renders Mermaid source from Markdown
+  templates into committed SVG diagrams and rejects stale artifacts in CI.

@@ -13,7 +13,9 @@
 ## Quality gates
 
 - [ ] PHPUnit
+- [ ] Line coverage remains at least 95%
 - [ ] PHPStan/Larastan max
 - [ ] Pint
 - [ ] Relevant database/Redis/Docker/Compose tests
+- [ ] Property/fuzz tests for new untrusted-input transformations
 - [ ] Mutation tests for changed safety logic

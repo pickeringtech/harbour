@@ -12,6 +12,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  documentation:
+    name: README / Mermaid
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run readme:check
+
   quality:
     name: PHP ${{ matrix.php }} / quality
     runs-on: ubuntu-latest
@@ -31,6 +43,19 @@ jobs:
       - run: composer format:check
       - run: composer analyse
       - run: composer test
+
+  fuzz:
+    name: Property / fuzz testing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite
+          coverage: none
+      - uses: ramsey/composer-install@v4
+      - run: composer fuzz
 
   databases-and-redis:
     name: PostgreSQL / MySQL / Redis
@@ -92,15 +117,44 @@ jobs:
   coverage:
     name: Coverage
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_PASSWORD: harbour
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+      mysql:
+        image: mysql:9
+        env:
+          MYSQL_ROOT_PASSWORD: harbour
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd "mysqladmin ping -pharbour"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+      redis:
+        image: redis:8-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      HARBOUR_DATABASE_INTEGRATION: '1'
+      HARBOUR_REDIS_INTEGRATION: '1'
+      HARBOUR_DOCKER_INTEGRATION: '1'
+      POSTGRES_PASSWORD: harbour
+      MYSQL_PASSWORD: harbour
     steps:
       - uses: actions/checkout@v7
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: mbstring, pdo_sqlite
+          extensions: mbstring, pdo_sqlite, pdo_pgsql, pdo_mysql
           coverage: pcov
       - uses: ramsey/composer-install@v4
-      - run: vendor/bin/phpunit --coverage-clover build/coverage.xml --coverage-text
+      - run: composer coverage
       - uses: actions/upload-artifact@v7
         with:
           name: coverage
