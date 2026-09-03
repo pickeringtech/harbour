@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -6,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const mermaidConfigPath = path.join(root, 'mermaid.config.json')
+const puppeteerConfigPath = path.join(root, 'puppeteer.config.json')
 const check = process.argv.includes('--check')
 const marker = /<!-- harbour:diagram id="([a-z0-9-]+)" alt="([^"\r\n]+)" -->\r?\n```mermaid\r?\n([\s\S]*?)\r?\n```/g
 const documents = [
@@ -22,6 +24,10 @@ const documents = [
         imageReference: 'images/architecture',
     },
 ]
+const mermaidConfig = await readFile(mermaidConfigPath)
+const puppeteerConfig = await readFile(puppeteerConfigPath)
+const packageManifest = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'))
+const rendererVersion = packageManifest.devDependencies['@mermaid-js/mermaid-cli']
 
 const escapeMarkdownAlt = (value) => value.replaceAll('[', '\\[').replaceAll(']', '\\]')
 
@@ -36,6 +42,16 @@ const sameContents = async (target, expected) => {
         throw error
     }
 }
+
+const sourceFingerprint = (source) => createHash('sha256')
+    .update(source)
+    .update('\0')
+    .update(mermaidConfig)
+    .update('\0')
+    .update(puppeteerConfig)
+    .update('\0')
+    .update(rendererVersion)
+    .digest('hex')
 
 const temporaryDirectory = await mkdtemp(path.join(tmpdir(), 'harbour-readme-'))
 const executable = path.join(
@@ -76,10 +92,16 @@ try {
                 '--input', input,
                 '--output', output,
                 '--configFile', mermaidConfigPath,
+                '--puppeteerConfigFile', puppeteerConfigPath,
                 '--quiet',
             ], { cwd: root, stdio: 'inherit' })
 
-            generatedDiagrams.set(id, await readFile(output))
+            const fingerprint = sourceFingerprint(source)
+            const stamp = `<!-- harbour:mermaid-source-sha256=${fingerprint} -->\n`
+            generatedDiagrams.set(id, {
+                fingerprint,
+                contents: Buffer.concat([Buffer.from(stamp), await readFile(output)]),
+            })
         }
 
         const notice = `<!-- Generated from ${document.template} by \`npm run readme:render\`. Do not edit directly. -->\n\n`
@@ -94,9 +116,22 @@ try {
                 stale.push(document.output)
             }
 
-            for (const [id, contents] of generatedDiagrams) {
+            for (const [id, diagram] of generatedDiagrams) {
                 const relative = `${document.imageDirectory}/${id}.svg`
-                if (!await sameContents(path.join(root, relative), contents)) {
+                let committed = ''
+                try {
+                    committed = await readFile(path.join(root, relative), 'utf8')
+                } catch (error) {
+                    if (error?.code !== 'ENOENT') {
+                        throw error
+                    }
+                }
+
+                const expectedStamp = `<!-- harbour:mermaid-source-sha256=${diagram.fingerprint} -->`
+                if (!committed.startsWith(expectedStamp)
+                    || !committed.includes('<svg')
+                    || !committed.includes('<title')
+                    || !committed.includes('<desc')) {
                     stale.push(relative)
                 }
             }
@@ -104,8 +139,8 @@ try {
             await mkdir(diagramDirectory, { recursive: true })
             await writeFile(outputPath, expectedDocument)
 
-            for (const [id, contents] of generatedDiagrams) {
-                await writeFile(path.join(diagramDirectory, `${id}.svg`), contents)
+            for (const [id, diagram] of generatedDiagrams) {
+                await writeFile(path.join(diagramDirectory, `${id}.svg`), diagram.contents)
             }
         }
 

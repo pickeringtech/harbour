@@ -20,7 +20,12 @@ Compose tests; it is not replaced by them.
 Documentation diagrams are Mermaid source in `README.template.md` and
 `docs/architecture.template.md`. `npm run readme:render` generates the
 published Markdown and committed SVGs; `npm run readme:check` is the CI
-freshness gate.
+freshness gate. SVGs carry a source/config/renderer fingerprint because browser
+font metrics are not byte-identical across platforms; CI renders every Mermaid
+block to validate it, then verifies that fingerprint and accessibility metadata
+on the committed asset. Mermaid runs Chromium without its sandbox only inside
+this trusted, ephemeral documentation-rendering process because hosted Ubuntu
+runners block Chromium's user-namespace sandbox.
 
 CI environment flags are deliberately explicit so a developer's local services
 are never touched accidentally:
