@@ -8,6 +8,7 @@ const output = path.join(root, 'build/pages')
 const base = normalizeBase(process.env.PAGES_BASE ?? '/harbour/')
 const siteUrl = `https://pickeringtech.github.io${base}`
 const repository = 'https://github.com/pickeringtech/harbour'
+const company = 'https://picktech.co.uk/'
 const pages = [
     { route: '', source: 'docs/site/index.md', title: 'Harbour', description: 'Lightweight isolated Laravel environments for parallel development.' },
     { route: 'getting-started', source: 'docs/site/getting-started.md', title: 'Getting started', description: 'Install Harbour and prepare isolated Laravel workspaces.' },
@@ -89,7 +90,7 @@ function layout(page, content) {
         <aside aria-label="Documentation sections">${nav}</aside>
         <main>${content}</main>
     </div>
-    <footer><span>Harbour is open-source software released under the MIT License.</span><a href="${repository}">View on GitHub</a></footer>
+    <footer><span>Made with love by <a href="${company}">Pickering Technologies (PickTech)</a>. Harbour is released under the MIT License.</span><a href="${repository}">View on GitHub</a></footer>
 </body>
 </html>
 `

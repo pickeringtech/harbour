@@ -232,4 +232,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development and release quality gates
 
 Harbour is open-source software licensed under the [MIT License](LICENSE).
 
+Made with love by [Pickering Technologies (PickTech)](https://picktech.co.uk/).
+
 **Sail less. Ship more.**
