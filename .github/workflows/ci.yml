@@ -20,7 +20,7 @@ jobs:
       matrix:
         php: ['8.4', '8.5']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
@@ -64,7 +64,7 @@ jobs:
       POSTGRES_PASSWORD: harbour
       MYSQL_PASSWORD: harbour
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
@@ -79,7 +79,7 @@ jobs:
     env:
       HARBOUR_DOCKER_INTEGRATION: '1'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
@@ -93,7 +93,7 @@ jobs:
     name: Coverage
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
@@ -110,7 +110,7 @@ jobs:
     name: Mutation testing
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
@@ -123,7 +123,7 @@ jobs:
     name: Fresh Laravel install
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
