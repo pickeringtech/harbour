@@ -128,9 +128,9 @@ vite_port_b="$(status_port "${acceptance_root}/status-b.json" VITE_PORT)"
 reverb_port_a="$(status_port "${acceptance_root}/status-a.json" REVERB_PORT)"
 reverb_port_b="$(status_port "${acceptance_root}/status-b.json" REVERB_PORT)"
 
-setsid bash -c 'cd "$1" && exec npm run dev -- --host 127.0.0.1 --port "$2" --strictPort' bash "${workspace_a}" "${vite_port_a}" >"${acceptance_root}/vite-a.log" 2>&1 &
+setsid bash -c 'cd "$1" && exec env LARAVEL_BYPASS_ENV_CHECK=1 npm run dev -- --host 127.0.0.1 --port "$2" --strictPort' bash "${workspace_a}" "${vite_port_a}" >"${acceptance_root}/vite-a.log" 2>&1 &
 vite_a=$!
-setsid bash -c 'cd "$1" && exec npm run dev -- --host 127.0.0.1 --port "$2" --strictPort' bash "${workspace_b}" "${vite_port_b}" >"${acceptance_root}/vite-b.log" 2>&1 &
+setsid bash -c 'cd "$1" && exec env LARAVEL_BYPASS_ENV_CHECK=1 npm run dev -- --host 127.0.0.1 --port "$2" --strictPort' bash "${workspace_b}" "${vite_port_b}" >"${acceptance_root}/vite-b.log" 2>&1 &
 vite_b=$!
 setsid bash -c 'cd "$1" && exec php artisan reverb:start --host=127.0.0.1 --port="$2"' bash "${workspace_a}" "${reverb_port_a}" >"${acceptance_root}/reverb-a.log" 2>&1 &
 reverb_a=$!
