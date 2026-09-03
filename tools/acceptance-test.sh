@@ -44,7 +44,7 @@ composer --working-dir="${project_root}" require --dev pickeringtech/harbour:@de
 if [[ "${REDIS_CLIENT}" == "predis" ]]; then
     composer --working-dir="${project_root}" require predis/predis --no-interaction
 fi
-(cd "${project_root}" && php artisan workspace:install --json)
+(cd "${project_root}" && php artisan workspace:install --database=pgsql --cache=redis --mail=mailpit --json)
 cp "${harbour_source}/tests/Fixtures/acceptance/.env.harbour" "${project_root}/.env.harbour"
 cp "${harbour_source}/tests/Fixtures/acceptance/harbour.php" "${project_root}/config/harbour.php"
 cp "${harbour_source}/tests/Fixtures/acceptance/docker-compose.harbour.yml" "${project_root}/docker-compose.harbour.yml"

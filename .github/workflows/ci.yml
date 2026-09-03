@@ -209,7 +209,7 @@ jobs:
         working-directory: /tmp/harbour-app
       - run: php artisan list --format=json | grep -q workspace:setup
         working-directory: /tmp/harbour-app
-      - run: php artisan workspace:install --json
+      - run: php artisan workspace:install --database=sqlite --cache=file --mail=log --json
         working-directory: /tmp/harbour-app
       - name: Exercise setup and teardown in the fresh application
         working-directory: /tmp/harbour-app

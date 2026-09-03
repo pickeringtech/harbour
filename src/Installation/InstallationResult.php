@@ -17,9 +17,10 @@ final readonly class InstallationResult
         public array $updated,
         public array $unchanged,
         public array $conflicts,
+        public InstallationSelection $selection,
     ) {}
 
-    /** @return array{created: list<string>, updated: list<string>, unchanged: list<string>, conflicts: list<string>} */
+    /** @return array{created: list<string>, updated: list<string>, unchanged: list<string>, conflicts: list<string>, selection: array{database: string, cache: string, mail: string, services: list<string>, provider: string}} */
     public function toArray(): array
     {
         return [
@@ -27,6 +28,7 @@ final readonly class InstallationResult
             'updated' => $this->updated,
             'unchanged' => $this->unchanged,
             'conflicts' => $this->conflicts,
+            'selection' => $this->selection->toArray(),
         ];
     }
 }

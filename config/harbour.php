@@ -13,6 +13,14 @@ return [
     'project_name' => env('APP_NAME'),
     'workspace_path' => null,
 
+    'installation' => [
+        'database' => null,
+        'cache' => null,
+        'mail' => null,
+        'services' => [],
+        'provider' => 'shared',
+    ],
+
     'identity' => [
         'strategy' => DefaultWorkspaceIdentityStrategy::class,
     ],

@@ -17,5 +17,7 @@ enum ErrorCode: string
     case UnresolvedVariable = 'UNRESOLVED_VARIABLE';
     case UnsafeOperation = 'UNSAFE_OPERATION';
     case InvalidConfiguration = 'INVALID_CONFIGURATION';
+    case InstallSelectionRequired = 'INSTALL_SELECTION_REQUIRED';
+    case InvalidInstallSelection = 'INVALID_INSTALL_SELECTION';
     case ProcessFailed = 'PROCESS_FAILED';
 }

@@ -25,6 +25,10 @@ composer require --dev pickeringtech/harbour
 php artisan workspace:install
 ```
 
+The install command interactively selects the database, cache, mail transport,
+and optional Sail-compatible services. It generates configuration for those
+choices instead of silently assuming a default stack.
+
 After those generated project files are reviewed and committed, every developer or agent uses:
 
 ```bash

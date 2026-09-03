@@ -25,6 +25,9 @@ final readonly class DefaultVariableResolver implements WorkspaceVariableResolve
         yield new ResolvedVariable('REDIS_QUEUE', rtrim($redis, ':').':queue', self::class);
         yield new ResolvedVariable('HORIZON_PREFIX', $redis.'horizon:', self::class);
         yield new ResolvedVariable('SESSION_COOKIE', $cookie, self::class);
+        yield new ResolvedVariable('MONGODB_DATABASE', $this->identifiers->database($context->identity, $context->projectName), self::class);
+        yield new ResolvedVariable('SEARCH_PREFIX', $this->identifiers->database($context->identity, $context->projectName).'_', self::class);
+        yield new ResolvedVariable('OBJECT_STORAGE_BUCKET', $this->identifiers->bucket($context->identity, $context->projectName), self::class);
         yield new ResolvedVariable('VITE_HOT_FILE', $context->workspacePath.'/.harbour/vite/hot', self::class);
 
         foreach ($context->ports as $name => $port) {

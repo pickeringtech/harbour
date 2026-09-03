@@ -6,6 +6,15 @@ All notable changes will be documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- `workspace:install` now interactively selects database, cache, mail, and
+  optional shared services instead of assuming SQLite.
+- Added deterministic `--database` / `-d`, `--cache` / `-c`, `--mail` / `-m`,
+  and Sail-compatible `--with` installation options.
+- Non-interactive installation now requires explicit choices and generated
+  configuration records their shared-infrastructure provenance.
+
 ## [0.0.1] - 2026-09-03
 
 ### Added

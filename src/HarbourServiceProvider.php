@@ -77,10 +77,7 @@ final class HarbourServiceProvider extends ServiceProvider
             return new FileWorkspaceStateRepository($this->workspacePath($app).'/'.$state);
         });
         $this->app->singleton(EnvironmentManager::class, fn (Application $app): EnvironmentManager => new EnvironmentManager($this->workspacePath($app)));
-        $this->app->singleton(ProjectInstaller::class, fn (Application $app): ProjectInstaller => new ProjectInstaller(
-            $this->workspacePath($app),
-            dirname(__DIR__),
-        ));
+        $this->app->singleton(ProjectInstaller::class, fn (Application $app): ProjectInstaller => new ProjectInstaller($this->workspacePath($app)));
         $this->app->singleton(LifecycleLock::class, fn (Application $app): LifecycleLock => new LifecycleLock($this->workspacePath($app).'/.harbour/locks/lifecycle.lock'));
         $this->app->singleton(DatabaseManager::class, fn (Application $app): DatabaseManager => new DatabaseManager([
             $app->make(PostgreSqlDatabaseDriver::class),

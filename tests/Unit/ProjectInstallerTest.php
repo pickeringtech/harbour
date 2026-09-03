@@ -6,6 +6,7 @@ namespace PickeringTech\Harbour\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
 use PickeringTech\Harbour\Exceptions\HarbourException;
+use PickeringTech\Harbour\Installation\InstallationSelection;
 use PickeringTech\Harbour\Installation\ProjectInstaller;
 
 final class ProjectInstallerTest extends TestCase
@@ -26,14 +27,23 @@ final class ProjectInstallerTest extends TestCase
 
     public function test_it_prepares_an_idempotent_project_installation(): void
     {
-        $installer = new ProjectInstaller($this->workspace, dirname(__DIR__, 2));
-        $first = $installer->install();
+        $installer = new ProjectInstaller($this->workspace);
+        $selection = self::selection();
+        $first = $installer->install($selection);
 
         self::assertSame(['.env.harbour', 'config/harbour.php'], $first->created);
         self::assertSame(['.gitignore', 'composer.json'], $first->updated);
         self::assertSame([], $first->conflicts);
         self::assertFileExists($this->workspace.'/.env.harbour');
         self::assertFileExists($this->workspace.'/config/harbour.php');
+        self::assertStringContainsString('DB_CONNECTION=sqlite', (string) file_get_contents($this->workspace.'/.env.harbour'));
+        self::assertSame($selection->toArray(), $first->selection->toArray());
+        $configuration = require $this->workspace.'/config/harbour.php';
+        self::assertIsArray($configuration);
+        self::assertSame($selection->toArray(), $configuration['installation']);
+        $database = $configuration['database'] ?? null;
+        self::assertIsArray($database);
+        self::assertSame('sqlite', $database['connection']);
         self::assertStringContainsString("/.harbour.json\n/.harbour/\n", (string) file_get_contents($this->workspace.'/.gitignore'));
 
         $scripts = $this->composerScripts();
@@ -41,7 +51,7 @@ final class ProjectInstallerTest extends TestCase
         self::assertSame(['@php artisan workspace:status'], $scripts['workspace:status']);
         self::assertSame(['@php artisan workspace:teardown'], $scripts['workspace:teardown']);
 
-        $second = $installer->install();
+        $second = $installer->install($selection);
         self::assertSame([], $second->created);
         self::assertSame([], $second->updated);
         self::assertEqualsCanonicalizing(['.env.harbour', 'config/harbour.php', '.gitignore', 'composer.json'], $second->unchanged);
@@ -58,7 +68,7 @@ final class ProjectInstallerTest extends TestCase
             'scripts' => ['workspace:setup' => ['custom setup']],
         ], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
 
-        $result = (new ProjectInstaller($this->workspace, dirname(__DIR__, 2)))->install();
+        $result = (new ProjectInstaller($this->workspace))->install(self::selection());
 
         self::assertSame("CUSTOM=yes\n", file_get_contents($this->workspace.'/.env.harbour'));
         self::assertSame(['composer.json scripts.workspace:setup'], $result->conflicts);
@@ -72,14 +82,14 @@ final class ProjectInstallerTest extends TestCase
         symlink('/tmp', $this->workspace.'/.env.harbour');
 
         $this->expectException(HarbourException::class);
-        (new ProjectInstaller($this->workspace, dirname(__DIR__, 2)))->install();
+        (new ProjectInstaller($this->workspace))->install(self::selection());
     }
 
     public function test_it_appends_only_missing_ignore_entries_after_an_unterminated_file(): void
     {
         file_put_contents($this->workspace.'/.gitignore', '/.harbour.json');
 
-        (new ProjectInstaller($this->workspace, dirname(__DIR__, 2)))->install();
+        (new ProjectInstaller($this->workspace))->install(self::selection());
 
         self::assertSame("/.harbour.json\n\n# Harbour workspace state\n/.harbour/\n", file_get_contents($this->workspace.'/.gitignore'));
     }
@@ -90,7 +100,7 @@ final class ProjectInstallerTest extends TestCase
 
         $this->expectException(HarbourException::class);
         $this->expectExceptionMessage('containing composer.json');
-        (new ProjectInstaller($this->workspace, dirname(__DIR__, 2)))->install();
+        (new ProjectInstaller($this->workspace))->install(self::selection());
     }
 
     public function test_it_rejects_invalid_composer_json(): void
@@ -99,7 +109,7 @@ final class ProjectInstallerTest extends TestCase
 
         $this->expectException(HarbourException::class);
         $this->expectExceptionMessage('invalid JSON');
-        (new ProjectInstaller($this->workspace, dirname(__DIR__, 2)))->install();
+        (new ProjectInstaller($this->workspace))->install(self::selection());
     }
 
     public function test_it_rejects_a_non_object_composer_manifest(): void
@@ -108,7 +118,7 @@ final class ProjectInstallerTest extends TestCase
 
         $this->expectException(HarbourException::class);
         $this->expectExceptionMessage('JSON object');
-        (new ProjectInstaller($this->workspace, dirname(__DIR__, 2)))->install();
+        (new ProjectInstaller($this->workspace))->install(self::selection());
     }
 
     public function test_it_rejects_non_object_composer_scripts(): void
@@ -117,7 +127,7 @@ final class ProjectInstallerTest extends TestCase
 
         $this->expectException(HarbourException::class);
         $this->expectExceptionMessage('scripts must be a JSON object');
-        (new ProjectInstaller($this->workspace, dirname(__DIR__, 2)))->install();
+        (new ProjectInstaller($this->workspace))->install(self::selection());
     }
 
     /** @return array<string, mixed> */
@@ -135,6 +145,11 @@ final class ProjectInstallerTest extends TestCase
         }
 
         return $result;
+    }
+
+    private static function selection(): InstallationSelection
+    {
+        return new InstallationSelection('sqlite', 'file', 'log');
     }
 
     private function removeDirectory(string $path): void
