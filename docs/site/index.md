@@ -25,9 +25,9 @@ composer require --dev pickeringtech/harbour
 php artisan workspace:install
 ```
 
-The install command interactively selects the database, cache, mail transport,
-and optional Sail-compatible services. It generates configuration for those
-choices instead of silently assuming a default stack.
+The install command detects Sail, Compose, Herd, and Laravel environment choices,
+shows one proposal, and generates configuration only after approval. With no
+existing infrastructure it offers a zero-dependency SQLite/file/log setup.
 
 After those generated project files are reviewed and committed, every developer or agent uses:
 
@@ -49,3 +49,11 @@ This removes Harbour-owned resources and restores the `.env` that existed before
 ## Clear ownership boundaries
 
 Harbour does not create worktrees, manage branches or agents, install PHP or Node, or supervise long-running processes. Git, Orca, Herdr, and humans own the checkout. Harbour owns the Laravel environment inside it.
+
+## Learn by concern
+
+- [Workspaces](/workspaces/) explains identity, concurrency, setup, and teardown.
+- [Databases](/databases/) and [Laravel state](/laravel-state/) cover isolation.
+- [Vite and Reverb](/vite-and-reverb/) removes the usual multi-worktree port and hot-file friction.
+- [Docker](/docker/) and [Docker Compose](/docker-compose/) remain optional resource providers.
+- [Safety](/safety/) explains the evidence required before Harbour deletes anything.

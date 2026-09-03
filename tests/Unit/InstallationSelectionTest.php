@@ -8,6 +8,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use PickeringTech\Harbour\Exceptions\ErrorCode;
 use PickeringTech\Harbour\Exceptions\HarbourException;
+use PickeringTech\Harbour\Installation\InstallationDiscovery;
 use PickeringTech\Harbour\Installation\InstallationFileRenderer;
 use PickeringTech\Harbour\Installation\InstallationSelection;
 use ReflectionMethod;
@@ -105,12 +106,13 @@ final class InstallationSelectionTest extends TestCase
                             $mail,
                             $services === [] ? 'none' : implode(',', $services),
                         );
-                        $environment = $renderer->environment($selection);
+                        $discovery = InstallationDiscovery::explicit($selection);
+                        $environment = $renderer->environment($discovery);
                         preg_match_all('/^([A-Z][A-Z0-9_]*)=/m', $environment, $matches);
 
                         self::assertNotEmpty($matches[1]);
                         self::assertSame($matches[1], array_values(array_unique($matches[1])));
-                        self::assertStringContainsString("'provider' => 'shared'", $renderer->configuration($selection));
+                        self::assertStringContainsString("'provider' => 'shared'", $renderer->configuration($discovery));
                     }
                 }
             }
@@ -121,8 +123,9 @@ final class InstallationSelectionTest extends TestCase
     {
         $renderer = new InstallationFileRenderer;
         $selection = new InstallationSelection('pgsql', 'redis', 'mailpit', ['rabbitmq', 'minio']);
-        $configuration = $renderer->configuration($selection);
-        $environment = $renderer->environment($selection);
+        $discovery = InstallationDiscovery::explicit($selection);
+        $configuration = $renderer->configuration($discovery);
+        $environment = $renderer->environment($discovery);
 
         self::assertStringContainsString("'connection' => 'pgsql'", $configuration);
         self::assertStringContainsString("'rabbitmq' => [", $configuration);
@@ -133,15 +136,117 @@ final class InstallationSelectionTest extends TestCase
         self::assertStringContainsString('QUEUE_CONNECTION=rabbitmq', $environment);
         self::assertStringNotContainsString("QUEUE_CONNECTION=redis\n", $environment);
         self::assertStringContainsString('MINIO_BUCKET=${OBJECT_STORAGE_BUCKET}', $environment);
+
+        self::assertSame(
+            $renderer->environment($discovery),
+            $renderer->environment($selection),
+        );
     }
 
     public function test_mongodb_is_configured_without_relational_database_lifecycle(): void
     {
         $renderer = new InstallationFileRenderer;
         $selection = new InstallationSelection('mongodb', 'none', 'none');
+        $discovery = InstallationDiscovery::explicit($selection);
 
-        self::assertStringContainsString("'enabled' => false", $renderer->configuration($selection));
-        self::assertStringContainsString('MONGODB_DATABASE=${MONGODB_DATABASE}', $renderer->environment($selection));
+        self::assertStringContainsString("'enabled' => false", $renderer->configuration($discovery));
+        self::assertStringContainsString('MONGODB_DATABASE=${MONGODB_DATABASE}', $renderer->environment($discovery));
+    }
+
+    public function test_discovery_can_preserve_or_clear_provenance_when_a_selection_changes(): void
+    {
+        $initial = new InstallationDiscovery(
+            new InstallationSelection('pgsql', 'redis', 'log'),
+            true,
+            ['environment:.env'],
+            ['pgsql' => 15432],
+            ['DB_HOST'],
+        );
+        $replacement = new InstallationSelection('sqlite', 'file', 'none');
+
+        self::assertSame('${DB_HOST}', $initial->serviceHost('DB_HOST', 'pgsql'));
+        self::assertTrue($initial->hasEnvironmentVariable('DB_HOST'));
+        self::assertFalse($initial->hasEnvironmentVariable('MISSING'));
+        self::assertSame('fallback', $initial->templateValue('MISSING', 'fallback'));
+
+        $unchanged = $initial->withSelection($initial->selection);
+        self::assertSame(15432, $unchanged->port('pgsql', 1));
+        self::assertSame('${DB_HOST}', $unchanged->serviceHost('DB_HOST', 'pgsql'));
+
+        $detected = $initial->withSelection($replacement);
+        self::assertTrue($detected->detected);
+        self::assertSame(['environment:.env'], $detected->sources);
+        self::assertSame(1, $detected->port('pgsql', 1));
+        self::assertSame('127.0.0.1', $detected->serviceHost('DB_HOST', 'sqlite'));
+
+        $manual = $initial->withManualSelection($replacement);
+        self::assertFalse($manual->detected);
+        self::assertSame([], $manual->sources);
+        self::assertSame(1, $manual->port('pgsql', 1));
+    }
+
+    public function test_changing_detected_optional_services_discards_their_stale_endpoints_and_credentials(): void
+    {
+        $services = InstallationSelection::ADDITIONAL_SERVICES;
+        $variables = [
+            'MEILISEARCH_HOST',
+            'TYPESENSE_HOST',
+            'TYPESENSE_PORT',
+            'TYPESENSE_PROTOCOL',
+            'TYPESENSE_API_KEY',
+            'MINIO_ENDPOINT',
+            'MINIO_ACCESS_KEY_ID',
+            'MINIO_SECRET_ACCESS_KEY',
+            'RUSTFS_ENDPOINT',
+            'RUSTFS_ACCESS_KEY_ID',
+            'RUSTFS_SECRET_ACCESS_KEY',
+            'RABBITMQ_HOST',
+            'RABBITMQ_PORT',
+            'DUSK_DRIVER_URL',
+            'PUSHER_APP_ID',
+            'PUSHER_APP_KEY',
+            'PUSHER_APP_SECRET',
+            'PUSHER_HOST',
+            'PUSHER_PORT',
+            'PUSHER_SCHEME',
+        ];
+        $discovery = new InstallationDiscovery(
+            new InstallationSelection('sqlite', 'file', 'log', $services),
+            true,
+            ['sail:compose.yaml'],
+            array_fill_keys($services, 12345),
+            $variables,
+            $services,
+        );
+
+        $changed = $discovery->withSelection(new InstallationSelection('sqlite', 'file', 'log'));
+
+        foreach ($services as $service) {
+            self::assertSame(54321, $changed->port($service, 54321));
+        }
+        foreach ($variables as $variable) {
+            self::assertFalse($changed->hasEnvironmentVariable($variable));
+        }
+        self::assertSame([], $changed->localServices);
+    }
+
+    public function test_detected_reverb_credentials_are_referenced_and_server_port_follows_allocation(): void
+    {
+        $discovery = new InstallationDiscovery(
+            new InstallationSelection('sqlite', 'file', 'log'),
+            true,
+            ['environment:.env'],
+            [],
+            ['REVERB_APP_ID', 'REVERB_APP_KEY', 'REVERB_APP_SECRET', 'REVERB_SCHEME', 'BROADCAST_CONNECTION'],
+        );
+        $environment = (new InstallationFileRenderer)->environment($discovery);
+
+        self::assertStringContainsString('REVERB_SERVER_HOST=127.0.0.1', $environment);
+        self::assertStringContainsString('REVERB_SERVER_PORT=${REVERB_PORT}', $environment);
+        self::assertStringContainsString('REVERB_APP_ID=${REVERB_APP_ID}', $environment);
+        self::assertStringContainsString('REVERB_APP_SECRET=${REVERB_APP_SECRET}', $environment);
+        self::assertStringContainsString('BROADCAST_CONNECTION=${BROADCAST_CONNECTION}', $environment);
+        self::assertStringContainsString('VITE_REVERB_PORT=${REVERB_PORT}', $environment);
     }
 
     /** @param list<string> $additional */
@@ -174,7 +279,7 @@ final class InstallationSelectionTest extends TestCase
         $reflection = new ReflectionMethod($renderer, $method);
 
         $this->expectException(\LogicException::class);
-        $reflection->invoke($renderer, 'uncatalogued');
+        $reflection->invoke($renderer, 'uncatalogued', InstallationDiscovery::explicit(new InstallationSelection('none', 'none', 'none')));
     }
 
     /** @return iterable<string, array{string}> */

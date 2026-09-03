@@ -8,6 +8,19 @@ All notable changes will be documented here. The format follows
 
 ### Changed
 
+- `workspace:install` now detects Sail, Compose, Herd, `.env`, and
+  `.env.example`, presents one reviewable proposal, and supports deterministic
+  non-interactive discovery through `--detect`.
+- Projects without configured infrastructure are offered an explicit
+  zero-dependency SQLite, file-cache, and log-mail setup.
+- Detected host ports and existing credential placeholders are preserved
+  without including secret values in state or diagnostics.
+- Standard Laravel Vite projects now use their already workspace-local
+  `public/hot` file with no application code changes; explicitly configured
+  custom hot files are applied on Laravel's side by Harbour.
+- GitHub Pages now separates the concise README from task-oriented guides for
+  workspaces, environment templates, ports, databases, Laravel state,
+  Vite/Reverb, Docker, Compose, hooks, extension points, and debugging.
 - `workspace:install` now interactively selects database, cache, mail, and
   optional shared services instead of assuming SQLite.
 - Added deterministic `--database` / `-d`, `--cache` / `-c`, `--mail` / `-m`,

@@ -22,6 +22,8 @@ Harbour also works in the primary checkout and in non-Git directories by falling
 
 ## Orca IDE
 
+See the complete [Orca recipe](/orca/).
+
 **Orca owns the worktree. Harbour owns the Laravel environment.**
 
 Use this repository setup policy:
@@ -41,6 +43,8 @@ Harbour does not detect Orca or depend on it.
 
 ## Herdr
 
+See the complete [Herdr recipe](/herdr/).
+
 Run setup after Herdr creates or opens a worktree:
 
 ```bash
@@ -52,7 +56,7 @@ Run teardown before `herdr worktree remove`. A post-removal hook is too late bec
 
 ## Shared Sail services
 
-A project may publish a Sail PostgreSQL or Redis port to loopback and let native PHP processes share that service. Harbour creates separate databases and prefixes without calling Sail internals.
+`workspace:install` detects Sail services and published `FORWARD_*` host ports. Native PHP processes can then share a Sail-provided PostgreSQL or Redis service while Harbour creates separate databases and prefixes. Harbour does not call Sail internals or start the stack.
 
 ## Isolated Docker service
 

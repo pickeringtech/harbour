@@ -19,6 +19,10 @@ return [
         'mail' => null,
         'services' => [],
         'provider' => 'shared',
+        'discovery' => [
+            'detected' => false,
+            'sources' => [],
+        ],
     ],
 
     'identity' => [
@@ -36,6 +40,10 @@ return [
             'VITE_PORT' => ['range' => [9000, 9999]],
             'REVERB_PORT' => ['range' => [10000, 10999]],
         ],
+    ],
+
+    'vite' => [
+        'hot_file' => env('VITE_HOT_FILE'),
     ],
 
     'database' => [

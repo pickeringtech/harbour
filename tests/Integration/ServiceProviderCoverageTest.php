@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PickeringTech\Harbour\Tests\Integration;
 
 use Illuminate\Contracts\Config\Repository;
+use Illuminate\Foundation\Vite;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PickeringTech\Harbour\Contracts\PortAllocationStrategy;
 use PickeringTech\Harbour\Contracts\WorkspaceIdentityStrategy;
@@ -13,6 +14,7 @@ use PickeringTech\Harbour\Environment\EnvironmentManager;
 use PickeringTech\Harbour\Exceptions\ErrorCode;
 use PickeringTech\Harbour\Exceptions\HarbourException;
 use PickeringTech\Harbour\Facades\Harbour;
+use PickeringTech\Harbour\HarbourServiceProvider;
 use PickeringTech\Harbour\Ports\FilePortRegistry;
 use PickeringTech\Harbour\Tests\TestCase;
 use PickeringTech\Harbour\WorkspaceManager;
@@ -91,6 +93,24 @@ final class ServiceProviderCoverageTest extends TestCase
 
         self::assertSame(1, $status['version']);
         self::assertSame('absent', $status['workspace']['status']);
+    }
+
+    public function test_vite_uses_its_workspace_local_default_and_honours_an_explicit_hot_file(): void
+    {
+        $vite = $this->application()->make(Vite::class);
+        self::assertSame(public_path('/hot'), $vite->hotFile());
+
+        $hotFile = $this->workspaceDirectory.'/.harbour/vite/hot';
+        $config = $this->application()->make(Repository::class);
+        $config->set('harbour.vite.hot_file', $hotFile);
+
+        try {
+            (new HarbourServiceProvider($this->application()))->boot();
+            self::assertSame($hotFile, $vite->hotFile());
+        } finally {
+            $config->set('harbour.vite.hot_file', null);
+            $vite->useHotFile(public_path('/hot'));
+        }
     }
 
     private function restoreEnvironment(string $name, string|false $value): void

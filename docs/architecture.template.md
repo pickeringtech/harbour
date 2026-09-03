@@ -203,8 +203,12 @@ Generated defaults align with Laravel's supported configuration surface:
 - `QUEUE_PREFIX` and `QUEUE_NAME` provide an explicit workspace queue name for
   project queue configuration and worker commands;
 - `HORIZON_PREFIX` isolates Horizon metadata when the project reads it;
-- `VITE_PORT` and `VITE_HOT_FILE` isolate HMR endpoints and the hot marker;
-- `REVERB_PORT` isolates the Reverb listener configuration.
+- `VITE_PORT` isolates HMR endpoints while Laravel's default checkout-local
+  `public/hot` marker needs no customization;
+- an explicit `VITE_HOT_FILE` is supported for advanced projects and applied
+  to Laravel's Vite service by Harbour;
+- `REVERB_PORT` and `REVERB_SERVER_PORT` isolate Reverb client and listener
+  configuration.
 
 Harbour publishes integration snippets rather than monkey-patching framework
 internals. Projects retain control over their Laravel configuration files.
