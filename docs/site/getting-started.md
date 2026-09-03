@@ -8,7 +8,14 @@ Harbour has a one-time project installation and a repeated per-checkout setup. K
 - Laravel 13 or newer
 - Composer
 - Linux or macOS
+- The PDO driver for your configured database: `pdo_sqlite`, `pdo_pgsql`, or
+  `pdo_mysql`
 - Docker only if your project configures Docker or Compose resources
+
+Harbour's generated configuration uses SQLite by default, so a project that
+keeps that default needs `pdo_sqlite`. Choose PostgreSQL or MySQL/MariaDB in
+`config/harbour.php` only when the matching shared service and PDO driver are
+available.
 
 ## Install once per project
 
