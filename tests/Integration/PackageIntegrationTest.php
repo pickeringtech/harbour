@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PickeringTech\Harbour\Tests\Integration;
 
+use Illuminate\Console\Command;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\Artisan;
@@ -23,6 +24,13 @@ final class PackageIntegrationTest extends TestCase
         foreach (['workspace:install', 'workspace:setup', 'workspace:teardown', 'workspace:status', 'workspace:env', 'workspace:render', 'workspace:debug'] as $name) {
             self::assertArrayHasKey($name, $commands);
         }
+
+        $install = $commands['workspace:install'] ?? null;
+        self::assertInstanceOf(Command::class, $install);
+        $definition = $install->getDefinition();
+        self::assertSame('d', $definition->getOption('database')->getShortcut());
+        self::assertSame('c', $definition->getOption('cache')->getShortcut());
+        self::assertSame('m', $definition->getOption('mail')->getShortcut());
     }
 
     public function test_setup_generates_a_redacted_application_key_when_a_new_worktree_has_none(): void

@@ -36,6 +36,11 @@ final class ContextIdentifier
         return $this->bounded($name.'-'.$identity->slug(), '-', 128);
     }
 
+    public function bucket(WorkspaceIdentity $identity, string $project): string
+    {
+        return $this->bounded($project.'-'.$identity->slug(), '-', 63);
+    }
+
     private function bounded(string $value, string $separator, int $maximum, bool $letterFirst = false, bool $allowDots = false): string
     {
         $transliterated = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value);

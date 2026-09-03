@@ -40,5 +40,8 @@ final class DefaultVariableResolverTest extends TestCase
         self::assertSame('acme_feature_login_a1b2c3d4_fa73bfb1:queue:', $values['QUEUE_PREFIX']);
         self::assertSame('acme_feature_login_a1b2c3d4_fa73bfb1:horizon:', $values['HORIZON_PREFIX']);
         self::assertSame('acme_feature_login_a1b2c3d4_fa73bfb1', $values['SESSION_COOKIE']);
+        self::assertSame('acme_feature_login_a1b2c3d4_fa73bfb1', $values['MONGODB_DATABASE']);
+        self::assertSame('acme_feature_login_a1b2c3d4_fa73bfb1_', $values['SEARCH_PREFIX']);
+        self::assertSame('acme-feature-login-a1b2c3d4-a8bed26b', $values['OBJECT_STORAGE_BUCKET']);
     }
 }

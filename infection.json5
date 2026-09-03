@@ -5,6 +5,5 @@
     "minMsi": 85,
     "minCoveredMsi": 90,
     "testFramework": "phpunit",
-    "testFrameworkOptions": "--testsuite=Unit",
     "mutators": { "@default": true }
 }

@@ -2,6 +2,26 @@
 
 `config/harbour.php` is project policy. `.env.harbour` is the only template Harbour renders.
 
+## Recorded install selection
+
+`workspace:install` records the reviewed choices directly in configuration:
+
+```php
+'installation' => [
+    'database' => 'pgsql',
+    'cache' => 'redis',
+    'mail' => 'mailpit',
+    'services' => ['pgsql', 'redis', 'mailpit', 'meilisearch'],
+    'provider' => 'shared',
+],
+```
+
+Every selected Sail-compatible service also receives a `driver => shared`
+entry under `services`. This is descriptive project policy: setup uses the
+existing daemon and isolates mutable state where Laravel or the service allows
+it. Change or extend the generated configuration deliberately when a service
+needs Harbour's Docker or Compose provider.
+
 ## Environment template
 
 Interpolation deliberately supports one form:

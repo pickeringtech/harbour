@@ -8,9 +8,35 @@ Harbour commands describe workspace operations rather than branding. Human outpu
 php artisan workspace:install
 ```
 
-Purpose: perform the one-time, non-destructive project scaffolding required before Harbour can be used consistently across worktrees. Existing configuration and scripts are preserved.
+Purpose: interactively select the project's infrastructure and perform the one-time, non-destructive scaffolding required before Harbour can be used consistently across worktrees. Existing configuration and scripts are preserved.
 
-Use `--json` when an installer or agent needs a stable list of created, updated, unchanged, and conflicting files.
+For deterministic automation:
+
+```bash
+php artisan workspace:install \
+    -d postgresql \
+    -c redis \
+    -m mailpit \
+    --with=meilisearch,minio \
+    --no-interaction
+```
+
+Options:
+
+| Option | Choices | Purpose |
+| --- | --- | --- |
+| `-d`, `--database` | `none`, `sqlite`, `mysql`, `mariadb`, `pgsql`, `mongodb` | Select the primary datastore. `postgres` and `postgresql` alias `pgsql`. |
+| `-c`, `--cache` | `none`, `file`, `database`, `redis`, `valkey`, `memcached` | Configure cache plus safe session/queue defaults. |
+| `-m`, `--mail` | `none`, `log`, `mailpit` | Configure local mail delivery. |
+| `--with` | Comma-separated Sail service names or `none` | Add search, object storage, RabbitMQ, Selenium, Soketi, or express the entire selection with Sail vocabulary. |
+| `--json` | — | Return the selected stack and file changes using the stable JSON envelope. Explicit selections are required. |
+
+The full Sail-compatible service list is `mysql`, `pgsql`, `mariadb`,
+`mongodb`, `redis`, `valkey`, `memcached`, `meilisearch`, `typesense`, `minio`,
+`rustfs`, `mailpit`, `rabbitmq`, `selenium`, and `soketi`.
+
+Conflicting choices—such as `--database=sqlite --with=mysql` or
+`--with=redis,valkey`—fail before project files are written.
 
 ## `workspace:setup`
 

@@ -21,30 +21,30 @@ final readonly class ProjectInstaller
 
     public function __construct(
         private string $workspacePath,
-        private string $packagePath,
         private AtomicFile $files = new AtomicFile,
+        private InstallationFileRenderer $renderer = new InstallationFileRenderer,
     ) {}
 
-    public function install(): InstallationResult
+    public function install(InstallationSelection $selection): InstallationResult
     {
         $created = [];
         $updated = [];
         $unchanged = [];
         $conflicts = [];
 
-        $this->copyIfMissing('resources/.env.harbour', '.env.harbour', $created, $unchanged);
-        $this->copyIfMissing('config/harbour.php', 'config/harbour.php', $created, $unchanged);
+        $this->writeIfMissing('.env.harbour', $this->renderer->environment($selection), $created, $unchanged);
+        $this->writeIfMissing('config/harbour.php', $this->renderer->configuration($selection), $created, $unchanged);
         $this->updateGitignore($updated, $unchanged);
         $this->updateComposer($updated, $unchanged, $conflicts);
 
-        return new InstallationResult($created, $updated, $unchanged, $conflicts);
+        return new InstallationResult($created, $updated, $unchanged, $conflicts, $selection);
     }
 
     /**
      * @param  list<string>  $created
      * @param  list<string>  $unchanged
      */
-    private function copyIfMissing(string $source, string $destination, array &$created, array &$unchanged): void
+    private function writeIfMissing(string $destination, string $contents, array &$created, array &$unchanged): void
     {
         $target = $this->target($destination);
         $this->assertRegularOrMissing($target);
@@ -53,11 +53,6 @@ final readonly class ProjectInstaller
             $unchanged[] = $destination;
 
             return;
-        }
-
-        $contents = file_get_contents($this->packagePath.'/'.$source);
-        if ($contents === false) {
-            throw new HarbourException(ErrorCode::InvalidConfiguration, "Unable to read Harbour installation source [{$source}].");
         }
 
         $this->files->write($target, $contents, 0644);

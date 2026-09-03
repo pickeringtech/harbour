@@ -45,10 +45,33 @@ php artisan workspace:install
 ```
 
 The first command adds Harbour as a development-only dependency. The install
-command creates `.env.harbour` and `config/harbour.php` only when missing,
-adds Harbour state to `.gitignore`, and adds the three Composer workspace
-aliases below when their names are unused. It never replaces existing project
-files or scripts.
+command asks which database, cache, mail transport, and optional shared
+services the project uses. It then creates a matching `.env.harbour` and
+`config/harbour.php`, adds Harbour state to `.gitignore`, and adds the three
+Composer workspace aliases below when their names are unused. It never
+replaces existing project files or scripts.
+
+For agents and CI, make every choice explicit instead of opening prompts:
+
+```bash
+php artisan workspace:install \
+    --database=postgresql \
+    --cache=redis \
+    --mail=mailpit \
+    --with=meilisearch,minio \
+    --no-interaction
+```
+
+Short forms are available for the main groups: `-d`, `-c`, and `-m`.
+`--with` accepts Sail's service names: `mysql`, `pgsql`, `mariadb`, `mongodb`,
+`redis`, `valkey`, `memcached`, `meilisearch`, `typesense`, `minio`, `rustfs`,
+`mailpit`, `rabbitmq`, `selenium`, and `soketi`. Harbour also offers native
+choices such as SQLite, file/database cache, log mail, and `none`.
+
+Unlike Sail, these selections describe existing **shared** infrastructure.
+Harbour creates workspace-safe logical resources and configuration; it does
+not launch a full dependency stack for every checkout. Docker and Compose
+remain explicit opt-in resource providers.
 
 Review and commit those project-level changes. After that, every new clone or
 worktree needs only:
@@ -448,7 +471,7 @@ Events are `WorkspaceSettingUp`, `WorkspaceSetup`, `WorkspaceTearingDown`, and
 ## Commands and machine output
 
 ```text
-workspace:install [--json]
+workspace:install [-d|--database=...] [-c|--cache=...] [-m|--mail=...] [--with=...] [--json]
 workspace:setup [--fresh] [--force] [--json]
 workspace:teardown [--force] [--json]
 workspace:status [--json]
