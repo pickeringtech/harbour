@@ -1,0 +1,8 @@
+/.harbour.json
+/.harbour/
+/.phpunit.cache/
+/.phpstan.cache/
+/build/
+/coverage/
+/vendor/
+.phpunit.result.cache

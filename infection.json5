@@ -1,0 +1,10 @@
+{
+    "$schema": "https://raw.githubusercontent.com/infection/infection/0.35.4/resources/schema.json",
+    "source": { "directories": ["src"] },
+    "logs": { "text": "build/infection.log", "summary": "build/infection-summary.log" },
+    "minMsi": 85,
+    "minCoveredMsi": 90,
+    "testFramework": "phpunit",
+    "testFrameworkOptions": "--testsuite=Unit",
+    "mutators": { "@default": true }
+}

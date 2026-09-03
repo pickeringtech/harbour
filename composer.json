@@ -1,0 +1,72 @@
+{
+    "name": "pickeringtech/harbour",
+    "description": "Lightweight isolated Laravel environments for parallel development.",
+    "keywords": ["laravel", "worktree", "development-environment", "docker", "concurrency"],
+    "license": "MIT",
+    "type": "library",
+    "authors": [
+        {
+            "name": "Pickering Technologies",
+            "homepage": "https://github.com/pickeringtech"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/pickeringtech/harbour/issues",
+        "source": "https://github.com/pickeringtech/harbour"
+    },
+    "require": {
+        "php": "^8.4",
+        "illuminate/console": "^13.0",
+        "illuminate/contracts": "^13.0",
+        "illuminate/database": "^13.0",
+        "illuminate/events": "^13.0",
+        "illuminate/filesystem": "^13.0",
+        "illuminate/process": "^13.0",
+        "illuminate/support": "^13.0"
+    },
+    "require-dev": {
+        "giorgiosironi/eris": "^1.1",
+        "infection/infection": "^0.35.4",
+        "laravel/pint": "^1.25",
+        "larastan/larastan": "^3.8",
+        "orchestra/testbench": "^11.2",
+        "phpunit/phpunit": "^12.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "PickeringTech\\Harbour\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "PickeringTech\\Harbour\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "PickeringTech\\Harbour\\HarbourServiceProvider"
+            ],
+            "aliases": {
+                "Harbour": "PickeringTech\\Harbour\\Facades\\Harbour"
+            }
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "infection/extension-installer": true
+        },
+        "sort-packages": true
+    },
+    "scripts": {
+        "test": "phpunit",
+        "test:unit": "phpunit --testsuite=Unit",
+        "test:integration": "phpunit --testsuite=Integration",
+        "analyse": "phpstan analyse --memory-limit=1G",
+        "format": "pint",
+        "format:check": "pint --test",
+        "mutate": "infection --threads=max"
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

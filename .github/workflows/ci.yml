@@ -1,0 +1,138 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: PHP ${{ matrix.php }} / quality
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4', '8.5']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, pdo_sqlite
+          coverage: none
+      - uses: ramsey/composer-install@v3
+      - run: composer validate --strict
+      - run: composer format:check
+      - run: composer analyse
+      - run: composer test
+
+  databases-and-redis:
+    name: PostgreSQL / MySQL / Redis
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_PASSWORD: harbour
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+      mysql:
+        image: mysql:9
+        env:
+          MYSQL_ROOT_PASSWORD: harbour
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd "mysqladmin ping -pharbour"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+      redis:
+        image: redis:8-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      HARBOUR_DATABASE_INTEGRATION: '1'
+      HARBOUR_REDIS_INTEGRATION: '1'
+      POSTGRES_PASSWORD: harbour
+      MYSQL_PASSWORD: harbour
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, pdo_pgsql, pdo_mysql
+          coverage: none
+      - uses: ramsey/composer-install@v3
+      - run: composer test:integration
+
+  docker:
+    name: Docker / Compose ownership
+    runs-on: ubuntu-latest
+    env:
+      HARBOUR_DOCKER_INTEGRATION: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite
+          coverage: none
+      - uses: ramsey/composer-install@v3
+      - run: docker compose version
+      - run: vendor/bin/phpunit tests/Integration/DockerIntegrationTest.php
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite
+          coverage: pcov
+      - uses: ramsey/composer-install@v3
+      - run: vendor/bin/phpunit --coverage-clover build/coverage.xml --coverage-text
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: build/coverage.xml
+
+  mutation:
+    name: Mutation testing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite
+          coverage: pcov
+      - uses: ramsey/composer-install@v3
+      - run: composer mutate
+
+  installability:
+    name: Fresh Laravel install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite
+          coverage: none
+      - run: composer create-project laravel/laravel:^13.0 /tmp/harbour-app --no-interaction
+      - run: composer config repositories.harbour path ${{ github.workspace }}
+        working-directory: /tmp/harbour-app
+      - run: composer require --dev pickeringtech/harbour:@dev --no-interaction
+        working-directory: /tmp/harbour-app
+      - run: php artisan list --format=json | grep -q workspace:setup
+        working-directory: /tmp/harbour-app
