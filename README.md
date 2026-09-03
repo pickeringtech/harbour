@@ -18,8 +18,12 @@ infrastructure stays shared.
 <!-- Diagram source: README.template.md#shared-infrastructure -->
 ![Without Harbour, each worktree runs a full stack. With Harbour, native worktrees use isolated namespaces on shared infrastructure.](docs/images/readme/shared-infrastructure.svg)
 
-Harbour is not anti-Sail. It is for the high-density case where one full Sail
-stack per worktree costs more than the isolation it provides.
+We love Sail. It does an excellent job of giving a Laravel project a complete,
+reproducible Docker development stack. Harbour addresses a narrower need: when
+many clones or worktrees run in parallel, repeating that complete stack for
+every checkout is unnecessarily heavyweight. Harbour keeps the native Laravel
+workflow and shares infrastructure while isolating each workspace's mutable
+state. The two tools serve different development modes and work well together.
 
 ## Install
 
@@ -182,9 +186,8 @@ Harbour supports PHP 8.4+, Laravel 13+, Linux, and macOS. Docker is needed only
 for projects that opt into Docker or Compose resources.
 
 Harbour does not create Git worktrees, manage coding agents, install PHP or
-Node, supervise long-running processes, require Docker, replace Compose, replace
-Sail in every use case, deploy production systems, or support non-Laravel
-frameworks.
+Node, supervise long-running processes, require Docker, replace Compose or
+Sail, deploy production systems, or support non-Laravel frameworks.
 
 ## Security
 

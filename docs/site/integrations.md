@@ -54,9 +54,17 @@ composer workspace:setup
 
 Run teardown before `herdr worktree remove`. A post-removal hook is too late because Harbour's ownership state lived inside the checkout.
 
-## Shared Sail services
+## Sail and Harbour
 
-`workspace:install` detects Sail services and published `FORWARD_*` host ports. Native PHP processes can then share a Sail-provided PostgreSQL or Redis service while Harbour creates separate databases and prefixes. Harbour does not call Sail internals or start the stack.
+Sail is excellent when a Laravel project needs a complete, reproducible Docker
+development stack. Harbour solves the narrower high-density case where many
+parallel worktrees do not each need a duplicate application stack.
+
+`workspace:install` detects Sail services and published `FORWARD_*` host ports.
+Native PHP processes can then share a Sail-provided PostgreSQL or Redis service
+while Harbour creates separate databases and prefixes. Harbour respects Sail's
+ownership: it does not call Sail internals, rewrite its files, or start and stop
+the stack.
 
 ## Isolated Docker service
 

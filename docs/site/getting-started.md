@@ -51,7 +51,13 @@ Harbour creates `.env.harbour` and `config/harbour.php` only when missing, appen
 
 ### What discovery does not do
 
-Discovery is read-only. Harbour does not run `sail up`, `herd init`, Docker, package managers, or system-service installers. It does not rewrite a Sail or Herd file. The generated policy uses existing shared infrastructure; physical workspace containers remain an explicit choice.
+Discovery is read-only. Harbour does not run `sail up`, `herd init`, Docker,
+package managers, or system-service installers. It does not rewrite a Sail or
+Herd file. Sail remains the right tool when a project wants its complete Docker
+development stack; Harbour reuses its published services only when the project
+chooses the lighter native-PHP, parallel-worktree model. The generated policy
+uses existing shared infrastructure; physical workspace containers remain an
+explicit choice.
 
 ### Agents and CI
 
