@@ -23,10 +23,10 @@ flowchart TB
     manager --> variables("Variables")
     manager --> databases("Databases")
     manager --> resources("Resources")
-    variables --> environment[Environment rendering]
-    databases --> pdo[PDO]
-    resources --> docker[Docker]
-    resources --> compose[Compose]
+    variables --> environment("Environment rendering")
+    databases --> pdo("PDO")
+    resources --> docker("Docker")
+    resources --> compose("Compose")
 
     classDef entry fill:#1b1b18,stroke:#1b1b18,color:#ffffff,stroke-width:2px
     classDef manager fill:#f53003,stroke:#d62a00,color:#ffffff,stroke-width:2.5px

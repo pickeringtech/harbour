@@ -19,14 +19,14 @@ flowchart LR
 
     subgraph without[Without Harbour]
         direction TB
-        WA("worktree-a") --> SA[full Sail stack]
-        WB("worktree-b") --> SB[full Sail stack]
-        WC("worktree-c") --> SC[full Sail stack]
+        WA("worktree-a") --> SA("full Sail stack")
+        WB("worktree-b") --> SB("full Sail stack")
+        WC("worktree-c") --> SC("full Sail stack")
     end
 
     subgraph with[With Harbour]
         direction TB
-        shared[Shared infrastructure<br/>PostgreSQL · Redis · Mailpit]
+        shared("Shared infrastructure<br/>PostgreSQL · Redis · Mailpit")
         shared --> namespaces([Harbour isolation<br/>databases · prefixes · queues · sessions · ports])
         namespaces --> HA("worktree-a<br/>native PHP + Node")
         namespaces --> HB("worktree-b<br/>native PHP + Node")

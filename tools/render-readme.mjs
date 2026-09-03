@@ -28,6 +28,117 @@ const mermaidConfig = await readFile(mermaidConfigPath)
 const puppeteerConfig = await readFile(puppeteerConfigPath)
 const packageManifest = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'))
 const rendererVersion = packageManifest.devDependencies['@mermaid-js/mermaid-cli']
+const renderProfile = 'transparent-background;native-svg-labels;adaptive-laravel-theme-v1'
+const adaptiveTheme = `
+<style id="harbour-adaptive-theme">
+    #my-svg {
+        color-scheme: light dark;
+        background-color: transparent !important;
+    }
+
+    #my-svg .cluster > rect {
+        rx: 10px;
+        ry: 10px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+        #my-svg .cluster[id$="-without"] > rect {
+            fill: #1b1b18 !important;
+            stroke: #4a4a45 !important;
+        }
+
+        #my-svg .cluster[id$="-with"] > rect {
+            fill: #271714 !important;
+            stroke: #ff4438 !important;
+        }
+
+        #my-svg .cluster[id$="-without"] .cluster-label text {
+            fill: #c7c7c1 !important;
+        }
+
+        #my-svg .cluster[id$="-with"] .cluster-label text {
+            fill: #ff6b62 !important;
+        }
+
+        #my-svg .node.muted rect,
+        #my-svg .node.stack rect,
+        #my-svg .node.adapter rect,
+        #my-svg .node.neutral rect {
+            fill: #242422 !important;
+            stroke: #5b5b56 !important;
+        }
+
+        #my-svg .node.muted text,
+        #my-svg .node.muted tspan,
+        #my-svg .node.stack text,
+        #my-svg .node.stack tspan,
+        #my-svg .node.adapter text,
+        #my-svg .node.adapter tspan,
+        #my-svg .node.neutral text,
+        #my-svg .node.neutral tspan {
+            fill: #d6d6d1 !important;
+        }
+
+        #my-svg .node.shared rect,
+        #my-svg .node.entry rect,
+        #my-svg .node.failure rect {
+            fill: #30302d !important;
+            stroke: #73736d !important;
+        }
+
+        #my-svg .node.shared text,
+        #my-svg .node.shared tspan,
+        #my-svg .node.entry text,
+        #my-svg .node.entry tspan,
+        #my-svg .node.failure text,
+        #my-svg .node.failure tspan {
+            fill: #ffffff !important;
+        }
+
+        #my-svg .node.workspace rect,
+        #my-svg .node.domain rect,
+        #my-svg .node.active rect {
+            fill: #321815 !important;
+            stroke: #ff4438 !important;
+        }
+
+        #my-svg .node.workspace text,
+        #my-svg .node.workspace tspan,
+        #my-svg .node.domain text,
+        #my-svg .node.domain tspan,
+        #my-svg .node.active text,
+        #my-svg .node.active tspan {
+            fill: #f5f5f3 !important;
+        }
+
+        #my-svg .node.harbour rect,
+        #my-svg .node.manager rect,
+        #my-svg .node.ready rect {
+            fill: #f53003 !important;
+            stroke: #ff6b62 !important;
+        }
+
+        #my-svg .node.harbour text,
+        #my-svg .node.harbour tspan,
+        #my-svg .node.manager text,
+        #my-svg .node.manager tspan,
+        #my-svg .node.ready text,
+        #my-svg .node.ready tspan {
+            fill: #ffffff !important;
+        }
+
+        #my-svg .edgeLabel rect,
+        #my-svg .labelBkg {
+            fill: #161615 !important;
+            opacity: 0.96 !important;
+        }
+
+        #my-svg .edgeLabel text,
+        #my-svg .edgeLabel tspan {
+            fill: #e8e8e5 !important;
+        }
+    }
+</style>`
 
 const escapeMarkdownAlt = (value) => value.replaceAll('[', '\\[').replaceAll(']', '\\]')
 
@@ -51,7 +162,15 @@ const sourceFingerprint = (source) => createHash('sha256')
     .update(puppeteerConfig)
     .update('\0')
     .update(rendererVersion)
+    .update('\0')
+    .update(renderProfile)
+    .update('\0')
+    .update(adaptiveTheme)
     .digest('hex')
+
+const applyAdaptiveTheme = (svg) => svg
+    .replaceAll(/\s*!important/g, '')
+    .replace('</svg>', `${adaptiveTheme}\n</svg>`)
 
 const temporaryDirectory = await mkdtemp(path.join(tmpdir(), 'harbour-readme-'))
 const executable = path.join(
@@ -93,14 +212,16 @@ try {
                 '--output', output,
                 '--configFile', mermaidConfigPath,
                 '--puppeteerConfigFile', puppeteerConfigPath,
+                '--backgroundColor', 'transparent',
                 '--quiet',
             ], { cwd: root, stdio: 'inherit' })
 
             const fingerprint = sourceFingerprint(source)
             const stamp = `<!-- harbour:mermaid-source-sha256=${fingerprint} -->\n`
+            const svg = applyAdaptiveTheme(await readFile(output, 'utf8'))
             generatedDiagrams.set(id, {
                 fingerprint,
-                contents: Buffer.concat([Buffer.from(stamp), await readFile(output)]),
+                contents: Buffer.from(stamp + svg),
             })
         }
 
@@ -131,7 +252,9 @@ try {
                 if (!committed.startsWith(expectedStamp)
                     || !committed.includes('<svg')
                     || !committed.includes('<title')
-                    || !committed.includes('<desc')) {
+                    || !committed.includes('<desc')
+                    || !committed.includes('id="harbour-adaptive-theme"')
+                    || !committed.includes('@media (prefers-color-scheme: dark)')) {
                     stale.push(relative)
                 }
             }
