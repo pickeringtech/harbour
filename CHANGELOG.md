@@ -6,6 +6,8 @@ All notable changes will be documented here. The format follows
 
 ## [Unreleased]
 
+## [0.0.2] - 2026-09-03
+
 ### Changed
 
 - `workspace:install` now detects Sail, Compose, Herd, `.env`, and
@@ -50,5 +52,6 @@ All notable changes will be documented here. The format follows
 - A full two-worktree Laravel acceptance job covering PostgreSQL, Redis cache,
   locks, queues, Docker, Compose, independent teardown, and failure recovery.
 
-[Unreleased]: https://github.com/pickeringtech/harbour/compare/v0.0.1...HEAD
+[Unreleased]: https://github.com/pickeringtech/harbour/compare/v0.0.2...HEAD
+[0.0.2]: https://github.com/pickeringtech/harbour/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/pickeringtech/harbour/releases/tag/v0.0.1
