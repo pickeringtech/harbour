@@ -2,6 +2,24 @@
     "deterministicIds": true,
     "deterministicIDSeed": "harbour-readme",
     "fontFamily": "Arial, sans-serif",
+    "flowchart": {
+        "curve": "basis",
+        "nodeSpacing": 42,
+        "rankSpacing": 54
+    },
     "htmlLabels": false,
-    "theme": "neutral"
+    "theme": "base",
+    "themeVariables": {
+        "background": "#ffffff",
+        "clusterBkg": "#fdfdfc",
+        "clusterBorder": "#e3e3e0",
+        "edgeLabelBackground": "#ffffff",
+        "fontSize": "15px",
+        "lineColor": "#a8a8a4",
+        "primaryBorderColor": "#f53003",
+        "primaryColor": "#fff7f5",
+        "primaryTextColor": "#1b1b18",
+        "secondaryColor": "#ffffff",
+        "tertiaryColor": "#f7f7f5"
+    }
 }

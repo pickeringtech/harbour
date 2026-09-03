@@ -17,16 +17,30 @@ flowchart TB
     accTitle: Harbour component boundaries
     accDescr: Artisan commands and application code call WorkspaceManager, which coordinates identity, state, variable, database, and resource services. Variables feed environment rendering, databases use PDO, and resources use Docker or Compose.
 
-    entry[Artisan commands and application code] --> manager[WorkspaceManager]
-    manager --> identity[Identity]
-    manager --> state[State]
-    manager --> variables[Variables]
-    manager --> databases[Databases]
-    manager --> resources[Resources]
+    entry("Laravel application<br/>Artisan · PHP API") --> manager([WorkspaceManager])
+    manager --> identity("Identity")
+    manager --> state("State")
+    manager --> variables("Variables")
+    manager --> databases("Databases")
+    manager --> resources("Resources")
     variables --> environment[Environment rendering]
     databases --> pdo[PDO]
     resources --> docker[Docker]
     resources --> compose[Compose]
+
+    classDef entry fill:#1b1b18,stroke:#1b1b18,color:#ffffff,stroke-width:2px
+    classDef manager fill:#f53003,stroke:#d62a00,color:#ffffff,stroke-width:2.5px
+    classDef domain fill:#fff7f5,stroke:#f53003,color:#1b1b18,stroke-width:2px
+    classDef adapter fill:#ffffff,stroke:#d6d6d2,color:#706f6c,stroke-width:1.5px
+
+    class entry entry
+    class manager manager
+    class identity,state,variables,databases,resources domain
+    class environment,pdo,docker,compose adapter
+
+    linkStyle 0 stroke:#f53003,stroke-width:2.5px
+    linkStyle 1,2,3,4,5 stroke:#f53003,stroke-width:2px
+    linkStyle 6,7,8,9 stroke:#a8a8a4,stroke-width:1.5px
 ```
 
 The domain layer does not depend on Laravel Console. Infrastructure adapters
@@ -50,17 +64,29 @@ The persisted state machine is deliberately small:
 
 <!-- harbour:diagram id="lifecycle" alt="Harbour workspace states progress from absent through preparing to ready, while failures and teardown converge safely back to absent." -->
 ```mermaid
-stateDiagram-v2
+flowchart LR
     accTitle: Harbour workspace lifecycle
     accDescr: An absent workspace enters preparing and then ready. Preparing can fail. Ready or failed workspaces enter tearing down, which returns them to absent.
 
-    [*] --> absent
-    absent --> preparing: setup
-    preparing --> ready: setup succeeds
-    preparing --> failed: setup fails
-    ready --> tearing_down: teardown
-    failed --> tearing_down: teardown
-    tearing_down --> absent: cleanup succeeds
+    absent("Absent") -->|workspace:setup| preparing("Preparing")
+    preparing -->|succeeds| ready([Ready])
+    preparing -->|fails| failed("Failed")
+    ready -->|teardown| tearingDown("Tearing down")
+    failed -->|teardown| tearingDown
+    tearingDown -->|cleanup succeeds| absent
+
+    classDef neutral fill:#ffffff,stroke:#a8a8a4,color:#706f6c,stroke-width:1.5px
+    classDef active fill:#fff7f5,stroke:#f53003,color:#1b1b18,stroke-width:2px
+    classDef ready fill:#f53003,stroke:#d62a00,color:#ffffff,stroke-width:2.5px
+    classDef failure fill:#1b1b18,stroke:#1b1b18,color:#ffffff,stroke-width:2px
+
+    class absent neutral
+    class preparing,tearingDown active
+    class ready ready
+    class failed failure
+
+    linkStyle 0,1,3,4,5 stroke:#f53003,stroke-width:2px
+    linkStyle 2 stroke:#1b1b18,stroke-width:2px
 ```
 
 Every mutation is serialized by a workspace lifecycle lock. Setup writes

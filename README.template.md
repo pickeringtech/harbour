@@ -19,21 +19,38 @@ flowchart LR
 
     subgraph without[Without Harbour]
         direction TB
-        WA[worktree-a] --> SA[full Sail stack]
-        WB[worktree-b] --> SB[full Sail stack]
-        WC[worktree-c] --> SC[full Sail stack]
+        WA("worktree-a") --> SA[full Sail stack]
+        WB("worktree-b") --> SB[full Sail stack]
+        WC("worktree-c") --> SC[full Sail stack]
     end
 
     subgraph with[With Harbour]
         direction TB
         shared[Shared infrastructure<br/>PostgreSQL · Redis · Mailpit]
-        shared --> namespaces[Workspace-isolated databases,<br/>prefixes, queues, sessions, and ports]
-        namespaces --> HA[worktree-a<br/>native PHP + Node]
-        namespaces --> HB[worktree-b<br/>native PHP + Node]
-        namespaces --> HC[worktree-c<br/>native PHP + Node]
+        shared --> namespaces([Harbour isolation<br/>databases · prefixes · queues · sessions · ports])
+        namespaces --> HA("worktree-a<br/>native PHP + Node")
+        namespaces --> HB("worktree-b<br/>native PHP + Node")
+        namespaces --> HC("worktree-c<br/>native PHP + Node")
     end
 
     SC ~~~ shared
+
+    classDef muted fill:#f7f7f5,stroke:#d6d6d2,color:#706f6c,stroke-width:1.5px
+    classDef stack fill:#ffffff,stroke:#a8a8a4,color:#706f6c,stroke-width:1.5px
+    classDef shared fill:#1b1b18,stroke:#1b1b18,color:#ffffff,stroke-width:2px
+    classDef harbour fill:#f53003,stroke:#d62a00,color:#ffffff,stroke-width:2.5px
+    classDef workspace fill:#ffffff,stroke:#f53003,color:#1b1b18,stroke-width:2px
+
+    class WA,WB,WC muted
+    class SA,SB,SC stack
+    class shared shared
+    class namespaces harbour
+    class HA,HB,HC workspace
+
+    style without fill:#fafaf9,stroke:#d6d6d2,stroke-width:1px,color:#706f6c
+    style with fill:#fff8f6,stroke:#f53003,stroke-width:2px,color:#d62a00
+    linkStyle 0,1,2 stroke:#a8a8a4,stroke-width:1.5px
+    linkStyle 3,4,5,6 stroke:#f53003,stroke-width:2px
 ```
 
 Harbour is not anti-Sail. It is for the high-density case where running an
