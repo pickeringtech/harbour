@@ -14,6 +14,7 @@ verify the committed Markdown and SVGs:
 npm ci
 npm run readme:render
 npm run readme:check
+npm run docs:build
 ```
 
 ```bash
@@ -22,6 +23,7 @@ cd harbour
 composer install
 composer test
 composer fuzz
+composer acceptance
 composer coverage
 composer mutate
 composer analyse

@@ -20,9 +20,27 @@ final class PackageIntegrationTest extends TestCase
     {
         $commands = $this->application()->make(Kernel::class)->all();
 
-        foreach (['workspace:setup', 'workspace:teardown', 'workspace:status', 'workspace:env', 'workspace:render', 'workspace:debug'] as $name) {
+        foreach (['workspace:install', 'workspace:setup', 'workspace:teardown', 'workspace:status', 'workspace:env', 'workspace:render', 'workspace:debug'] as $name) {
             self::assertArrayHasKey($name, $commands);
         }
+    }
+
+    public function test_setup_generates_a_redacted_application_key_when_a_new_worktree_has_none(): void
+    {
+        unlink($this->workspaceDirectory.'/.env');
+        file_put_contents($this->workspaceDirectory.'/.env.harbour', "APP_KEY=\${APP_KEY}\nAPP_PORT=\${APP_PORT}\n");
+        $manager = $this->application()->make(WorkspaceManager::class);
+
+        $workspace = $manager->setup();
+        $contents = (string) file_get_contents($this->workspaceDirectory.'/.env');
+
+        self::assertMatchesRegularExpression('/APP_KEY=base64:[A-Za-z0-9+\\/=]{44}/', $contents);
+        self::assertSame('[REDACTED]', $workspace->variables()->debug()['APP_KEY']['value']);
+        self::assertSame('generated_workspace_secret', $workspace->variables()->debug()['APP_KEY']['source']);
+        self::assertArrayNotHasKey('APP_KEY', $workspace->state()->variables);
+
+        $manager->teardown(true);
+        self::assertFileDoesNotExist($this->workspaceDirectory.'/.env');
     }
 
     public function test_setup_and_teardown_are_idempotent_and_restore_environment(): void

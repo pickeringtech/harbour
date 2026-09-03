@@ -2,11 +2,13 @@
     "name": "harbour-documentation",
     "private": true,
     "scripts": {
+        "docs:build": "node tools/build-docs.mjs",
         "readme:render": "node tools/render-readme.mjs",
         "readme:check": "node tools/render-readme.mjs --check"
     },
     "devDependencies": {
-        "@mermaid-js/mermaid-cli": "11.17.0"
+        "@mermaid-js/mermaid-cli": "11.17.0",
+        "marked": "^18.0.11"
     },
     "allowScripts": {
         "puppeteer@25.10.0": true

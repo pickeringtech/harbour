@@ -1,6 +1,7 @@
 {
     "name": "pickeringtech/harbour",
     "description": "Lightweight isolated Laravel environments for parallel development.",
+    "homepage": "https://pickeringtech.github.io/harbour/",
     "keywords": ["laravel", "worktree", "development-environment", "docker", "concurrency"],
     "license": "MIT",
     "type": "library",
@@ -63,6 +64,7 @@
         "test:unit": "phpunit --testsuite=Unit",
         "test:integration": "phpunit --testsuite=Integration",
         "fuzz": "phpunit tests/Unit/IdentifierPropertyTest.php",
+        "acceptance": "bash tools/acceptance-test.sh",
         "coverage": [
             "phpunit --coverage-clover build/coverage.xml --coverage-text",
             "@php tools/check-coverage.php build/coverage.xml 95"

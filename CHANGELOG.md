@@ -6,6 +6,8 @@ All notable changes will be documented here. The format follows
 
 ## [Unreleased]
 
+## [0.0.1] - 2026-09-03
+
 ### Added
 
 - Initial Laravel 13 package architecture.
@@ -21,3 +23,10 @@ All notable changes will be documented here. The format follows
   and mutation-quality gates in CI.
 - Generated documentation pipeline that renders Mermaid source from Markdown
   templates into committed SVG diagrams and rejects stale artifacts in CI.
+- A non-destructive `workspace:install` command for the one-time project setup.
+- An eight-page GitHub Pages documentation site with light and dark themes.
+- A full two-worktree Laravel acceptance job covering PostgreSQL, Redis cache,
+  locks, queues, Docker, Compose, independent teardown, and failure recovery.
+
+[Unreleased]: https://github.com/pickeringtech/harbour/compare/v0.0.1...HEAD
+[0.0.1]: https://github.com/pickeringtech/harbour/releases/tag/v0.0.1

@@ -2,7 +2,7 @@
 
 1. Confirm all required CI jobs pass on the release commit, including the 95%
    line-coverage floor and Infection thresholds.
-2. Run the manual two-worktree acceptance scenario in `docs/testing.md`.
+2. Run `composer acceptance` and inspect the two-worktree lifecycle result.
 3. Review dependency advisories and the ownership/security diff.
 4. Move Unreleased changelog entries under the new SemVer version and date.
 5. Validate README commands in a fresh Laravel 13 application.

@@ -10,6 +10,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
 use PickeringTech\Harbour\Console\DebugCommand;
 use PickeringTech\Harbour\Console\EnvironmentCommand;
+use PickeringTech\Harbour\Console\InstallCommand;
 use PickeringTech\Harbour\Console\RenderCommand;
 use PickeringTech\Harbour\Console\SetupCommand;
 use PickeringTech\Harbour\Console\StatusCommand;
@@ -28,6 +29,7 @@ use PickeringTech\Harbour\Environment\EnvironmentManager;
 use PickeringTech\Harbour\Exceptions\ErrorCode;
 use PickeringTech\Harbour\Exceptions\HarbourException;
 use PickeringTech\Harbour\Identity\DefaultWorkspaceIdentityStrategy;
+use PickeringTech\Harbour\Installation\ProjectInstaller;
 use PickeringTech\Harbour\Ports\DefaultPortAllocationStrategy;
 use PickeringTech\Harbour\Ports\FilePortRegistry;
 use PickeringTech\Harbour\Process\SymfonyCommandRunner;
@@ -75,6 +77,10 @@ final class HarbourServiceProvider extends ServiceProvider
             return new FileWorkspaceStateRepository($this->workspacePath($app).'/'.$state);
         });
         $this->app->singleton(EnvironmentManager::class, fn (Application $app): EnvironmentManager => new EnvironmentManager($this->workspacePath($app)));
+        $this->app->singleton(ProjectInstaller::class, fn (Application $app): ProjectInstaller => new ProjectInstaller(
+            $this->workspacePath($app),
+            dirname(__DIR__),
+        ));
         $this->app->singleton(LifecycleLock::class, fn (Application $app): LifecycleLock => new LifecycleLock($this->workspacePath($app).'/.harbour/locks/lifecycle.lock'));
         $this->app->singleton(DatabaseManager::class, fn (Application $app): DatabaseManager => new DatabaseManager([
             $app->make(PostgreSqlDatabaseDriver::class),
@@ -105,6 +111,7 @@ final class HarbourServiceProvider extends ServiceProvider
     {
         if ($this->app->runningInConsole()) {
             $this->commands([
+                InstallCommand::class,
                 SetupCommand::class,
                 TeardownCommand::class,
                 StatusCommand::class,

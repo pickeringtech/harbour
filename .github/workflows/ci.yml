@@ -12,6 +12,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  security:
+    name: Dependency advisories
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+      - uses: ramsey/composer-install@v4
+      - run: composer audit --locked --no-interaction
+      - run: npm ci
+      - run: npm audit --audit-level=high
+
   documentation:
     name: README / Mermaid
     runs-on: ubuntu-latest
@@ -23,6 +41,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run readme:check
+      - run: npm run docs:build
 
   quality:
     name: PHP ${{ matrix.php }} / quality
@@ -190,3 +209,46 @@ jobs:
         working-directory: /tmp/harbour-app
       - run: php artisan list --format=json | grep -q workspace:setup
         working-directory: /tmp/harbour-app
+      - run: php artisan workspace:install --json
+        working-directory: /tmp/harbour-app
+      - name: Exercise setup and teardown in the fresh application
+        working-directory: /tmp/harbour-app
+        run: |
+          original_checksum="$(sha256sum .env | cut -d ' ' -f 1)"
+          composer validate --strict
+          composer workspace:setup
+          php artisan workspace:status --json | grep -q '"status":"ready"'
+          composer workspace:teardown -- --force
+          test ! -e .harbour.json
+          test "$(sha256sum .env | cut -d ' ' -f 1)" = "${original_checksum}"
+
+  acceptance:
+    name: Two-worktree acceptance
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_PASSWORD: harbour
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+      redis:
+        image: redis:8-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      HARBOUR_ACCEPTANCE_DOCKER: '1'
+      POSTGRES_PASSWORD: harbour
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_pgsql, redis
+          coverage: none
+      - uses: ramsey/composer-install@v4
+      - run: composer acceptance

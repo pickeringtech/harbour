@@ -9,13 +9,27 @@ integration service enabled, so skipped database, Redis, Docker, or Compose
 tests cannot make the percentage look healthier than the release suite really
 is.
 
-The release acceptance scenario creates two Laravel 13 worktrees, runs setup
-concurrently, and proves distinct application/Vite/Reverb ports, databases,
-Redis/cache/session and queue names, Docker labels, and Compose projects.
-Teardown A must restore its original environment without changing B or shared
-services. Repeat after a failing `after_setup` hook. This manual scenario
-complements the automated real-Git, multi-process, PDO, Redis, Docker, and
-Compose tests; it is not replaced by them.
+The release acceptance scenario is automated by `composer acceptance`. It
+creates a real Laravel 13 project and two real Git worktrees, installs and runs
+setup concurrently, and proves distinct application/Vite/Reverb ports,
+databases, Redis/cache/session and queue names, cache locks, Docker containers,
+and Compose projects. It tears down A while proving B remains operational, then
+repeats cleanup after a failing `after_setup` hook.
+
+The CI acceptance job uses PostgreSQL, phpredis, Redis, Docker, and Compose. A
+local run needs those services and extensions, or may deliberately substitute
+SQLite and Predis while retaining the same full-worktree lifecycle:
+
+```bash
+HARBOUR_ACCEPTANCE_DATABASE=sqlite \
+REDIS_CLIENT=predis \
+HARBOUR_ACCEPTANCE_DOCKER=1 \
+composer acceptance
+```
+
+The acceptance harness creates everything below a validated temporary
+directory and cleans it on exit. It never uses a developer application or
+database.
 
 Documentation diagrams are Mermaid source in `README.template.md` and
 `docs/architecture.template.md`. `npm run readme:render` generates the

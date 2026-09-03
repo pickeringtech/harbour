@@ -16,6 +16,22 @@ use RuntimeException;
 
 final class CommandIntegrationTest extends TestCase
 {
+    public function test_install_command_reports_idempotent_project_changes_in_human_and_json_formats(): void
+    {
+        file_put_contents($this->workspaceDirectory.'/composer.json', "{\n    \"name\": \"acme/app\"\n}\n");
+
+        self::assertSame(0, Artisan::call('workspace:install'));
+        $output = Artisan::output();
+        self::assertStringContainsString('Harbour project files are ready.', $output);
+        self::assertStringContainsString('config/harbour.php', $output);
+        self::assertFileExists($this->workspaceDirectory.'/config/harbour.php');
+
+        self::assertSame(0, Artisan::call('workspace:install', ['--json' => true]));
+        $output = Artisan::output();
+        self::assertStringContainsString('"ok":true', $output);
+        self::assertStringContainsString('"updated":[]', $output);
+    }
+
     public function test_commands_report_absent_workspace_and_structured_errors(): void
     {
         self::assertSame(0, Artisan::call('workspace:status'));

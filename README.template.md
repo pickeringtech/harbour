@@ -1,5 +1,8 @@
 # Harbour
 
+[![CI](https://github.com/pickeringtech/harbour/actions/workflows/ci.yml/badge.svg)](https://github.com/pickeringtech/harbour/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-f53003.svg)](LICENSE)
+
 **Lightweight isolated Laravel environments for parallel development.**
 
 > Share infrastructure where practical. Isolate mutable state where necessary.
@@ -10,6 +13,9 @@ Node stay native; PostgreSQL, Redis, Mailpit, MinIO, and similar infrastructure
 can stay shared. Harbour allocates workspace ports, creates a database,
 namespaces Laravel's mutable state, renders `.env`, and remembers exactly what
 it owns so teardown is safe.
+
+[Read the documentation](https://pickeringtech.github.io/harbour/) or jump to
+the [two-command installation](https://pickeringtech.github.io/harbour/getting-started/).
 
 <!-- harbour:diagram id="shared-infrastructure" alt="Without Harbour, each worktree runs a full stack. With Harbour, native worktrees use isolated namespaces on shared infrastructure." -->
 ```mermaid
@@ -68,22 +74,32 @@ provides.
 
 ## Install
 
-The package name follows this repository's current GitHub organisation while
-the project is prepared for Packagist:
+Project maintainers install Harbour and prepare the repository once:
 
 ```bash
 composer require --dev pickeringtech/harbour
-php artisan vendor:publish --tag=harbour-config
-php artisan vendor:publish --tag=harbour-environment
+php artisan workspace:install
 ```
 
-Or start from your existing Laravel environment example:
+The first command adds Harbour as a development-only dependency. The install
+command creates `.env.harbour` and `config/harbour.php` only when missing,
+adds Harbour state to `.gitignore`, and adds the three Composer workspace
+aliases below when their names are unused. It never replaces existing project
+files or scripts.
+
+Review and commit those project-level changes. After that, every new clone or
+worktree needs only:
 
 ```bash
-cp .env.example .env.harbour
+composer install
+composer workspace:setup
 ```
 
-Add orchestration-neutral Composer scripts:
+`composer install` installs the checkout's PHP dependencies. `workspace:setup`
+creates that checkout's isolated ports, database, namespaces, environment, and
+configured optional services, then runs normal migrations.
+
+The installer adds these orchestration-neutral aliases transparently:
 
 ```json
 {
@@ -108,6 +124,10 @@ composer workspace:setup
 composer workspace:status
 composer workspace:teardown -- --force
 ```
+
+Status only reads the persisted workspace record. Teardown removes resources
+Harbour can prove it owns and restores the pre-setup `.env`. `--force` skips
+the confirmation prompt; it never weakens ownership checks.
 
 Harbour safely appends neither arbitrary files nor Git state. Commit
 `.env.harbour` and `config/harbour.php`; ignore `.env`, `.harbour.json`, and
@@ -465,6 +485,7 @@ Events are `WorkspaceSettingUp`, `WorkspaceSetup`, `WorkspaceTearingDown`, and
 ## Commands and machine output
 
 ```text
+workspace:install [--json]
 workspace:setup [--fresh] [--force] [--json]
 workspace:teardown [--force] [--json]
 workspace:status [--json]

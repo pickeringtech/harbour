@@ -51,6 +51,56 @@ final class DockerIntegrationTest extends TestCase
         }
     }
 
+    public function test_compose_teardown_preserves_external_networks_and_volumes(): void
+    {
+        if (getenv('HARBOUR_DOCKER_INTEGRATION') !== '1') {
+            self::markTestSkipped('Set HARBOUR_DOCKER_INTEGRATION=1 to mutate the local Docker daemon.');
+        }
+
+        $runner = new SymfonyCommandRunner;
+        $suffix = substr(hash('sha256', bin2hex(random_bytes(8))), 0, 12);
+        $volume = 'harbour_external_volume_'.$suffix;
+        $network = 'harbour_external_network_'.$suffix;
+        $directory = sys_get_temp_dir().'/harbour-compose-external-'.$suffix;
+        mkdir($directory, 0700, true);
+        file_put_contents($directory.'/compose.yml', <<<YAML
+        services:
+          sleeper:
+            image: alpine:3.22
+            command: ["sleep", "300"]
+            networks: [external]
+            volumes: [external-data:/data]
+        networks:
+          external:
+            external: true
+            name: {$network}
+        volumes:
+          external-data:
+            external: true
+            name: {$volume}
+        YAML);
+
+        self::assertTrue($runner->run(['docker', 'volume', 'create', $volume], $directory)->successful());
+        self::assertTrue($runner->run(['docker', 'network', 'create', $network], $directory)->successful());
+
+        try {
+            $manager = new ComposeManager($runner, new ContextIdentifier);
+            $resource = $manager->prepare($this->identity('external'), $directory, 'external', ['file' => 'compose.yml']);
+            $manager->start($resource, $directory, []);
+            $manager->destroy($resource, $directory);
+
+            self::assertTrue($runner->run(['docker', 'volume', 'inspect', $volume], $directory)->successful());
+            self::assertTrue($runner->run(['docker', 'network', 'inspect', $network], $directory)->successful());
+        } finally {
+            $runner->run(['docker', 'volume', 'rm', '--force', $volume], $directory);
+            $runner->run(['docker', 'network', 'rm', $network], $directory);
+            @unlink($directory.'/compose.yml');
+            @rmdir($directory.'/.harbour/compose');
+            @rmdir($directory.'/.harbour');
+            @rmdir($directory);
+        }
+    }
+
     private function identity(string $suffix): WorkspaceIdentity
     {
         $hash = hash('sha256', $suffix.bin2hex(random_bytes(4)));

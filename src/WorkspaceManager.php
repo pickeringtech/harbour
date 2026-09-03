@@ -309,6 +309,18 @@ final readonly class WorkspaceManager
             }
         }
 
+        if ($includeProcessEnvironment
+            && in_array('APP_KEY', $this->templates->variables($this->templateContents()), true)
+            && $bag->get('APP_KEY') === null) {
+            $bag->put(new ResolvedVariable(
+                'APP_KEY',
+                'base64:'.base64_encode(random_bytes(32)),
+                'generated_workspace_secret',
+                true,
+                false,
+            ));
+        }
+
         return $bag;
     }
 
