@@ -8,7 +8,7 @@
     "authors": [
         {
             "name": "Pickering Technologies",
-            "homepage": "https://github.com/pickeringtech"
+            "homepage": "https://picktech.co.uk/"
         }
     ],
     "support": {
@@ -63,7 +63,7 @@
         "test": "phpunit",
         "test:unit": "phpunit --testsuite=Unit",
         "test:integration": "phpunit --testsuite=Integration",
-        "fuzz": "phpunit tests/Unit/IdentifierPropertyTest.php",
+        "fuzz": "phpunit tests/Unit/IdentifierPropertyTest.php tests/Unit/InstallationDiscoveryPropertyTest.php",
         "acceptance": "bash tools/acceptance-test.sh",
         "coverage": [
             "phpunit --coverage-clover build/coverage.xml --coverage-text",
@@ -72,7 +72,7 @@
         "analyse": "phpstan analyse --memory-limit=1G",
         "format": "pint",
         "format:check": "pint --test",
-        "mutate": "infection --threads=max"
+        "mutate": "@php -d memory_limit=512M vendor/bin/infection --threads=max"
     },
     "minimum-stability": "stable",
     "prefer-stable": true

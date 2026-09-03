@@ -7,6 +7,7 @@ namespace PickeringTech\Harbour;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Foundation\Application;
+use Illuminate\Foundation\Vite;
 use Illuminate\Support\ServiceProvider;
 use PickeringTech\Harbour\Console\DebugCommand;
 use PickeringTech\Harbour\Console\EnvironmentCommand;
@@ -29,6 +30,7 @@ use PickeringTech\Harbour\Environment\EnvironmentManager;
 use PickeringTech\Harbour\Exceptions\ErrorCode;
 use PickeringTech\Harbour\Exceptions\HarbourException;
 use PickeringTech\Harbour\Identity\DefaultWorkspaceIdentityStrategy;
+use PickeringTech\Harbour\Installation\ProjectConfigurationDetector;
 use PickeringTech\Harbour\Installation\ProjectInstaller;
 use PickeringTech\Harbour\Ports\DefaultPortAllocationStrategy;
 use PickeringTech\Harbour\Ports\FilePortRegistry;
@@ -78,6 +80,7 @@ final class HarbourServiceProvider extends ServiceProvider
         });
         $this->app->singleton(EnvironmentManager::class, fn (Application $app): EnvironmentManager => new EnvironmentManager($this->workspacePath($app)));
         $this->app->singleton(ProjectInstaller::class, fn (Application $app): ProjectInstaller => new ProjectInstaller($this->workspacePath($app)));
+        $this->app->singleton(ProjectConfigurationDetector::class, fn (Application $app): ProjectConfigurationDetector => new ProjectConfigurationDetector($this->workspacePath($app)));
         $this->app->singleton(LifecycleLock::class, fn (Application $app): LifecycleLock => new LifecycleLock($this->workspacePath($app).'/.harbour/locks/lifecycle.lock'));
         $this->app->singleton(DatabaseManager::class, fn (Application $app): DatabaseManager => new DatabaseManager([
             $app->make(PostgreSqlDatabaseDriver::class),
@@ -106,6 +109,12 @@ final class HarbourServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $hotFile = $this->app->make(ConfigRepository::class)->get('harbour.vite.hot_file');
+        if (is_string($hotFile) && $hotFile !== '' && class_exists(Vite::class)) {
+            $vite = $this->app->make(Vite::class);
+            $vite->useHotFile($hotFile);
+        }
+
         if ($this->app->runningInConsole()) {
             $this->commands([
                 InstallCommand::class,

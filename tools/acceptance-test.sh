@@ -8,8 +8,17 @@ project_root="${acceptance_root}/project"
 workspace_a="${acceptance_root}/workspace-a"
 workspace_b="${acceptance_root}/workspace-b"
 workspace_failure="${acceptance_root}/workspace-failure"
+vite_a=""
+vite_b=""
+reverb_a=""
+reverb_b=""
 
 cleanup() {
+    for process in "${vite_a}" "${vite_b}" "${reverb_a}" "${reverb_b}"; do
+        if [[ -n "${process}" ]]; then
+            kill -- "-${process}" >/dev/null 2>&1 || true
+        fi
+    done
     for workspace in "${workspace_a}" "${workspace_b}" "${workspace_failure}"; do
         if [[ -f "${workspace}/artisan" && -f "${workspace}/.harbour.json" ]]; then
             (cd "${workspace}" && php artisan workspace:teardown --force) >/dev/null 2>&1 || true
@@ -27,8 +36,38 @@ cleanup() {
 }
 trap cleanup EXIT
 
+wait_for_file() {
+    local path="$1"
+    for _ in {1..60}; do
+        [[ -s "${path}" ]] && return 0
+        sleep 0.5
+    done
+    return 1
+}
+
+wait_for_port() {
+    local port="$1"
+    for _ in {1..60}; do
+        php -r '$socket = @stream_socket_client("tcp://127.0.0.1:".$argv[1], $error, $message, 0.2); if (is_resource($socket)) { fclose($socket); exit(0); } exit(1);' "${port}" && return 0
+        sleep 0.5
+    done
+    return 1
+}
+
+status_port() {
+    php -r '$status = json_decode(file_get_contents($argv[1]), true, flags: JSON_THROW_ON_ERROR); echo $status["workspace"]["ports"][$argv[2]];' "$1" "$2"
+}
+
 export HARBOUR_STATE_HOME="${acceptance_root}/registry"
 export HARBOUR_ACCEPTANCE_DOCKER="${HARBOUR_ACCEPTANCE_DOCKER:-0}"
+
+npm_security_options=()
+npm_version_major="$(npm --version | cut -d. -f1)"
+if (( npm_version_major >= 12 )); then
+    npm_security_options+=(--allow-remote=all)
+fi
+
+composer create-project laravel/laravel:^13.0 "${project_root}" --no-interaction --prefer-dist
 export DB_CONNECTION="${HARBOUR_ACCEPTANCE_DATABASE:-pgsql}"
 export DB_HOST="${POSTGRES_HOST:-127.0.0.1}"
 export DB_PORT="${POSTGRES_PORT:-5432}"
@@ -37,14 +76,17 @@ export DB_PASSWORD="${POSTGRES_PASSWORD:-harbour}"
 export REDIS_CLIENT="${REDIS_CLIENT:-phpredis}"
 export REDIS_HOST="${REDIS_HOST:-127.0.0.1}"
 export REDIS_PORT="${REDIS_PORT:-6379}"
-
-composer create-project laravel/laravel:^13.0 "${project_root}" --no-interaction --prefer-dist
 composer --working-dir="${project_root}" config repositories.harbour path "${harbour_source}"
 composer --working-dir="${project_root}" require --dev pickeringtech/harbour:@dev --no-interaction
+composer --working-dir="${project_root}" require laravel/reverb --with-all-dependencies --no-interaction
+(cd "${project_root}" && php artisan vendor:publish --provider='Laravel\Reverb\ReverbServiceProvider' --tag=reverb-config --force --no-interaction)
 if [[ "${REDIS_CLIENT}" == "predis" ]]; then
     composer --working-dir="${project_root}" require predis/predis --no-interaction
 fi
-(cd "${project_root}" && php artisan workspace:install --database=pgsql --cache=redis --mail=mailpit --json)
+npm --prefix "${project_root}" install --package-lock-only --ignore-scripts "${npm_security_options[@]}"
+cp "${harbour_source}/tests/Fixtures/acceptance/detected.env" "${project_root}/.env"
+(cd "${project_root}" && php artisan workspace:install --detect --json) \
+    | php -r '$result = json_decode(stream_get_contents(STDIN), true, flags: JSON_THROW_ON_ERROR); $selection = $result["installation"]["selection"] ?? []; exit(($result["installation"]["discovery"]["detected"] ?? false) && ($selection["database"] ?? null) === "pgsql" && ($selection["cache"] ?? null) === "redis" && ($selection["mail"] ?? null) === "mailpit" ? 0 : 1);'
 cp "${harbour_source}/tests/Fixtures/acceptance/.env.harbour" "${project_root}/.env.harbour"
 cp "${harbour_source}/tests/Fixtures/acceptance/harbour.php" "${project_root}/config/harbour.php"
 cp "${harbour_source}/tests/Fixtures/acceptance/docker-compose.harbour.yml" "${project_root}/docker-compose.harbour.yml"
@@ -65,6 +107,13 @@ install_b=$!
 wait "${install_a}" || { cat "${acceptance_root}/install-a.log"; exit 1; }
 wait "${install_b}" || { cat "${acceptance_root}/install-b.log"; exit 1; }
 
+(npm --prefix "${workspace_a}" ci "${npm_security_options[@]}" >"${acceptance_root}/npm-a.log" 2>&1) &
+npm_a=$!
+(npm --prefix "${workspace_b}" ci "${npm_security_options[@]}" >"${acceptance_root}/npm-b.log" 2>&1) &
+npm_b=$!
+wait "${npm_a}" || { cat "${acceptance_root}/npm-a.log"; exit 1; }
+wait "${npm_b}" || { cat "${acceptance_root}/npm-b.log"; exit 1; }
+
 (cd "${workspace_a}" && composer workspace:setup >"${acceptance_root}/setup-a.log" 2>&1) &
 setup_a=$!
 (cd "${workspace_b}" && composer workspace:setup >"${acceptance_root}/setup-b.log" 2>&1) &
@@ -74,6 +123,30 @@ wait "${setup_b}" || { cat "${acceptance_root}/setup-b.log"; exit 1; }
 
 (cd "${workspace_a}" && php artisan workspace:status --json) >"${acceptance_root}/status-a.json"
 (cd "${workspace_b}" && php artisan workspace:status --json) >"${acceptance_root}/status-b.json"
+vite_port_a="$(status_port "${acceptance_root}/status-a.json" VITE_PORT)"
+vite_port_b="$(status_port "${acceptance_root}/status-b.json" VITE_PORT)"
+reverb_port_a="$(status_port "${acceptance_root}/status-a.json" REVERB_PORT)"
+reverb_port_b="$(status_port "${acceptance_root}/status-b.json" REVERB_PORT)"
+
+setsid bash -c 'cd "$1" && exec env LARAVEL_BYPASS_ENV_CHECK=1 npm run dev -- --host 127.0.0.1 --port "$2" --strictPort' bash "${workspace_a}" "${vite_port_a}" >"${acceptance_root}/vite-a.log" 2>&1 &
+vite_a=$!
+setsid bash -c 'cd "$1" && exec env LARAVEL_BYPASS_ENV_CHECK=1 npm run dev -- --host 127.0.0.1 --port "$2" --strictPort' bash "${workspace_b}" "${vite_port_b}" >"${acceptance_root}/vite-b.log" 2>&1 &
+vite_b=$!
+setsid bash -c 'cd "$1" && exec php artisan reverb:start --host=127.0.0.1 --port="$2"' bash "${workspace_a}" "${reverb_port_a}" >"${acceptance_root}/reverb-a.log" 2>&1 &
+reverb_a=$!
+setsid bash -c 'cd "$1" && exec php artisan reverb:start --host=127.0.0.1 --port="$2"' bash "${workspace_b}" "${reverb_port_b}" >"${acceptance_root}/reverb-b.log" 2>&1 &
+reverb_b=$!
+
+wait_for_file "${workspace_a}/public/hot" || { cat "${acceptance_root}/vite-a.log"; exit 1; }
+wait_for_file "${workspace_b}/public/hot" || { cat "${acceptance_root}/vite-b.log"; exit 1; }
+wait_for_port "${reverb_port_a}" || { cat "${acceptance_root}/reverb-a.log"; exit 1; }
+wait_for_port "${reverb_port_b}" || { cat "${acceptance_root}/reverb-b.log"; exit 1; }
+grep -q ":${vite_port_a}" "${workspace_a}/public/hot"
+grep -q ":${vite_port_b}" "${workspace_b}/public/hot"
+test "$(cat "${workspace_a}/public/hot")" != "$(cat "${workspace_b}/public/hot")"
+curl --fail --silent "http://127.0.0.1:${vite_port_a}/@vite/client" >/dev/null
+curl --fail --silent "http://127.0.0.1:${vite_port_b}/@vite/client" >/dev/null
+
 (php "${harbour_source}/tools/acceptance-probe.php" "${workspace_a}" workspace-a write >"${acceptance_root}/probe-a.json") &
 probe_a=$!
 (php "${harbour_source}/tools/acceptance-probe.php" "${workspace_b}" workspace-b write >"${acceptance_root}/probe-b.json") &
@@ -83,6 +156,15 @@ wait "${probe_b}"
 php "${harbour_source}/tools/verify-acceptance.php" \
     "${acceptance_root}/status-a.json" "${acceptance_root}/status-b.json" \
     "${acceptance_root}/probe-a.json" "${acceptance_root}/probe-b.json"
+
+for process in "${vite_a}" "${vite_b}" "${reverb_a}" "${reverb_b}"; do
+    kill -- "-${process}" >/dev/null 2>&1 || true
+    wait "${process}" 2>/dev/null || true
+done
+vite_a=""
+vite_b=""
+reverb_a=""
+reverb_b=""
 
 php "${harbour_source}/tools/acceptance-probe.php" "${workspace_a}" workspace-a cleanup
 (cd "${workspace_a}" && composer workspace:teardown -- --force)

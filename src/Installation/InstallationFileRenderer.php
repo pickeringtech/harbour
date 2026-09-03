@@ -8,17 +8,19 @@ use LogicException;
 
 final class InstallationFileRenderer
 {
-    public function environment(InstallationSelection $selection): string
+    public function environment(InstallationSelection|InstallationDiscovery $installation): string
     {
+        $discovery = $this->discovery($installation);
+        $selection = $discovery->selection;
         $sections = [
-            $this->baseEnvironment(),
-            $this->databaseEnvironment($selection->database),
-            $this->cacheEnvironment($selection->cache),
-            $this->mailEnvironment($selection->mail),
+            $this->baseEnvironment($discovery),
+            $this->databaseEnvironment($selection->database, $discovery),
+            $this->cacheEnvironment($selection->cache, $discovery),
+            $this->mailEnvironment($selection->mail, $discovery),
         ];
 
         foreach ($selection->additionalServices as $service) {
-            $sections[] = $this->serviceEnvironment($service);
+            $sections[] = $this->serviceEnvironment($service, $discovery);
         }
 
         $variables = [];
@@ -37,11 +39,13 @@ final class InstallationFileRenderer
         return implode("\n", $variables)."\n";
     }
 
-    public function configuration(InstallationSelection $selection): string
+    public function configuration(InstallationSelection|InstallationDiscovery $installation): string
     {
+        $discovery = $this->discovery($installation);
+        $selection = $discovery->selection;
         $databaseEnabled = in_array($selection->database, ['sqlite', 'mysql', 'mariadb', 'pgsql'], true);
         $databaseConnection = $databaseEnabled ? $selection->database : null;
-        $installation = $this->export($selection->toArray(), 1);
+        $installation = $this->export([...$selection->toArray(), 'discovery' => $discovery->metadata()], 1);
         $services = [];
         foreach ($selection->services() as $service) {
             $services[$service] = ['driver' => 'shared'];
@@ -86,6 +90,10 @@ final class InstallationFileRenderer
                 ],
             ],
 
+            'vite' => [
+                'hot_file' => env('VITE_HOT_FILE'),
+            ],
+
             'database' => [
                 'enabled' => {$enabled},
                 'connection' => {$connection},
@@ -113,77 +121,142 @@ final class InstallationFileRenderer
         PHP;
     }
 
-    private function baseEnvironment(): string
+    private function baseEnvironment(InstallationDiscovery $discovery): string
     {
-        return <<<'ENV'
-        APP_NAME=Laravel
+        $appName = $discovery->templateValue('APP_NAME', 'Laravel');
+
+        $environment = <<<ENV
+        APP_NAME={$appName}
         APP_ENV=local
-        APP_KEY=${APP_KEY}
+        APP_KEY=\${APP_KEY}
         APP_DEBUG=true
-        APP_URL=${APP_URL}
+        APP_URL=\${APP_URL}
 
-        REDIS_PREFIX=${REDIS_PREFIX}
-        CACHE_PREFIX=${CACHE_PREFIX}
-        SESSION_COOKIE=${SESSION_COOKIE}
-        QUEUE_PREFIX=${QUEUE_PREFIX}
-        QUEUE_NAME=${QUEUE_NAME}
-        REDIS_QUEUE=${REDIS_QUEUE}
-        HORIZON_PREFIX=${HORIZON_PREFIX}
+        REDIS_PREFIX=\${REDIS_PREFIX}
+        CACHE_PREFIX=\${CACHE_PREFIX}
+        SESSION_COOKIE=\${SESSION_COOKIE}
+        QUEUE_PREFIX=\${QUEUE_PREFIX}
+        QUEUE_NAME=\${QUEUE_NAME}
+        REDIS_QUEUE=\${REDIS_QUEUE}
+        HORIZON_PREFIX=\${HORIZON_PREFIX}
 
-        VITE_PORT=${VITE_PORT}
-        VITE_HOT_FILE=${VITE_HOT_FILE}
-
+        VITE_PORT=\${VITE_PORT}
         REVERB_HOST=127.0.0.1
-        REVERB_PORT=${REVERB_PORT}
+        REVERB_PORT=\${REVERB_PORT}
+        REVERB_SERVER_HOST=127.0.0.1
+        REVERB_SERVER_PORT=\${REVERB_PORT}
         ENV;
+
+        foreach (['REVERB_APP_ID', 'REVERB_APP_KEY', 'REVERB_APP_SECRET', 'REVERB_SCHEME'] as $variable) {
+            if ($discovery->hasEnvironmentVariable($variable)) {
+                $environment .= "\n".$variable.'=${'.$variable.'}';
+            }
+        }
+        if ($discovery->hasEnvironmentVariable('BROADCAST_CONNECTION')) {
+            $environment .= "\nBROADCAST_CONNECTION=\${BROADCAST_CONNECTION}";
+        }
+        if ($discovery->hasEnvironmentVariable('REVERB_APP_KEY')) {
+            $scheme = $discovery->templateValue('REVERB_SCHEME', 'http');
+            $environment .= "\nVITE_REVERB_APP_KEY=\${REVERB_APP_KEY}"
+                ."\nVITE_REVERB_HOST=127.0.0.1"
+                ."\nVITE_REVERB_PORT=\${REVERB_PORT}"
+                ."\nVITE_REVERB_SCHEME={$scheme}";
+        }
+
+        return $environment;
     }
 
-    private function databaseEnvironment(string $database): string
+    private function databaseEnvironment(string $database, InstallationDiscovery $discovery): string
     {
+        $port = $discovery->port($database, $database === 'pgsql' ? 5432 : ($database === 'mongodb' ? 27017 : 3306));
+        $username = $discovery->templateValue('DB_USERNAME', $database === 'pgsql' ? 'postgres' : 'root');
+        $password = $discovery->templateValue('DB_PASSWORD', '');
+        $mongodbUri = $discovery->serviceValue('MONGODB_URI', 'mongodb', "mongodb://127.0.0.1:{$port}");
+        $host = $discovery->serviceHost('DB_HOST', $database);
+
         return match ($database) {
             'none' => "DB_CONNECTION=sqlite\nDB_DATABASE=:memory:",
             'sqlite' => "DB_CONNECTION=sqlite\nDB_DATABASE=\${DB_DATABASE}",
-            'mysql' => "DB_CONNECTION=mysql\nDB_HOST=127.0.0.1\nDB_PORT=3306\nDB_DATABASE=\${DB_DATABASE}\nDB_USERNAME=root\nDB_PASSWORD=",
-            'mariadb' => "DB_CONNECTION=mariadb\nDB_HOST=127.0.0.1\nDB_PORT=3306\nDB_DATABASE=\${DB_DATABASE}\nDB_USERNAME=root\nDB_PASSWORD=",
-            'pgsql' => "DB_CONNECTION=pgsql\nDB_HOST=127.0.0.1\nDB_PORT=5432\nDB_DATABASE=\${DB_DATABASE}\nDB_USERNAME=root\nDB_PASSWORD=",
-            'mongodb' => "DB_CONNECTION=mongodb\nMONGODB_URI=mongodb://127.0.0.1:27017\nMONGODB_DATABASE=\${MONGODB_DATABASE}",
+            'mysql' => "DB_CONNECTION=mysql\nDB_HOST={$host}\nDB_PORT={$port}\nDB_DATABASE=\${DB_DATABASE}\nDB_USERNAME={$username}\nDB_PASSWORD={$password}",
+            'mariadb' => "DB_CONNECTION=mariadb\nDB_HOST={$host}\nDB_PORT={$port}\nDB_DATABASE=\${DB_DATABASE}\nDB_USERNAME={$username}\nDB_PASSWORD={$password}",
+            'pgsql' => "DB_CONNECTION=pgsql\nDB_HOST={$host}\nDB_PORT={$port}\nDB_DATABASE=\${DB_DATABASE}\nDB_USERNAME={$username}\nDB_PASSWORD={$password}",
+            'mongodb' => "DB_CONNECTION=mongodb\nMONGODB_URI={$mongodbUri}\nMONGODB_DATABASE=\${MONGODB_DATABASE}",
             default => throw new LogicException("Unsupported rendered database [{$database}]."),
         };
     }
 
-    private function cacheEnvironment(string $cache): string
+    private function cacheEnvironment(string $cache, InstallationDiscovery $discovery): string
     {
+        $port = $discovery->port($cache, $cache === 'memcached' ? 11211 : 6379);
+        $password = $discovery->templateValue('REDIS_PASSWORD', 'null');
+        $redisHost = $discovery->serviceHost('REDIS_HOST', $cache);
+        $memcachedHost = $discovery->serviceHost('MEMCACHED_HOST', 'memcached');
+
         return match ($cache) {
             'none' => "CACHE_STORE=array\nSESSION_DRIVER=array\nQUEUE_CONNECTION=sync",
             'file' => "CACHE_STORE=file\nSESSION_DRIVER=file\nQUEUE_CONNECTION=sync",
             'database' => "CACHE_STORE=database\nSESSION_DRIVER=database\nQUEUE_CONNECTION=database",
-            'redis' => "CACHE_STORE=redis\nSESSION_DRIVER=redis\nQUEUE_CONNECTION=redis\nREDIS_HOST=127.0.0.1\nREDIS_PORT=6379",
-            'valkey' => "CACHE_STORE=redis\nSESSION_DRIVER=redis\nQUEUE_CONNECTION=redis\nREDIS_HOST=127.0.0.1\nREDIS_PORT=6379",
-            'memcached' => "CACHE_STORE=memcached\nSESSION_DRIVER=file\nQUEUE_CONNECTION=sync\nMEMCACHED_HOST=127.0.0.1\nMEMCACHED_PORT=11211",
+            'redis' => "CACHE_STORE=redis\nSESSION_DRIVER=redis\nQUEUE_CONNECTION=redis\nREDIS_HOST={$redisHost}\nREDIS_PASSWORD={$password}\nREDIS_PORT={$port}",
+            'valkey' => "CACHE_STORE=redis\nSESSION_DRIVER=redis\nQUEUE_CONNECTION=redis\nREDIS_HOST={$redisHost}\nREDIS_PASSWORD={$password}\nREDIS_PORT={$port}",
+            'memcached' => "CACHE_STORE=memcached\nSESSION_DRIVER=file\nQUEUE_CONNECTION=sync\nMEMCACHED_HOST={$memcachedHost}\nMEMCACHED_PORT={$port}",
             default => throw new LogicException("Unsupported rendered cache [{$cache}]."),
         };
     }
 
-    private function mailEnvironment(string $mail): string
+    private function mailEnvironment(string $mail, InstallationDiscovery $discovery): string
     {
+        $port = $discovery->port('mailpit', 1025);
+        $dashboardPort = $discovery->port('mailpit-dashboard', 8025);
+        $host = $discovery->serviceHost('MAIL_HOST', 'mailpit');
+        $username = $discovery->templateValue('MAIL_USERNAME', 'null');
+        $password = $discovery->templateValue('MAIL_PASSWORD', 'null');
+        $dashboardUrl = $discovery->serviceValue('MAILPIT_URL', 'mailpit', "http://127.0.0.1:{$dashboardPort}");
+
         return match ($mail) {
             'none' => 'MAIL_MAILER=array',
             'log' => 'MAIL_MAILER=log',
-            'mailpit' => "MAIL_MAILER=smtp\nMAIL_HOST=127.0.0.1\nMAIL_PORT=1025\nMAIL_USERNAME=null\nMAIL_PASSWORD=null\nMAIL_ENCRYPTION=null\nMAILPIT_URL=http://127.0.0.1:8025",
+            'mailpit' => "MAIL_MAILER=smtp\nMAIL_HOST={$host}\nMAIL_PORT={$port}\nMAIL_USERNAME={$username}\nMAIL_PASSWORD={$password}\nMAIL_ENCRYPTION=null\nMAILPIT_URL={$dashboardUrl}",
             default => throw new LogicException("Unsupported rendered mail transport [{$mail}]."),
         };
     }
 
-    private function serviceEnvironment(string $service): string
+    private function serviceEnvironment(string $service, InstallationDiscovery $discovery): string
     {
+        $port = $discovery->port($service, match ($service) {
+            'meilisearch' => 7700,
+            'typesense' => 8108,
+            'minio', 'rustfs' => 9000,
+            'rabbitmq' => 5672,
+            'selenium' => 4444,
+            'soketi' => 6001,
+            default => 1,
+        });
+        $meilisearchHost = $discovery->serviceValue('MEILISEARCH_HOST', 'meilisearch', "http://127.0.0.1:{$port}");
+        $typesenseHost = $discovery->serviceHost('TYPESENSE_HOST', 'typesense');
+        $typesenseProtocol = $discovery->templateValue('TYPESENSE_PROTOCOL', 'http');
+        $typesenseKey = $discovery->templateValue('TYPESENSE_API_KEY', 'xyz');
+        $minioEndpoint = $discovery->serviceValue('MINIO_ENDPOINT', 'minio', "http://127.0.0.1:{$port}");
+        $minioKey = $discovery->templateValue('MINIO_ACCESS_KEY_ID', 'sail');
+        $minioSecret = $discovery->templateValue('MINIO_SECRET_ACCESS_KEY', 'password');
+        $rustfsEndpoint = $discovery->serviceValue('RUSTFS_ENDPOINT', 'rustfs', "http://127.0.0.1:{$port}");
+        $rustfsKey = $discovery->templateValue('RUSTFS_ACCESS_KEY_ID', 'rustfsadmin');
+        $rustfsSecret = $discovery->templateValue('RUSTFS_SECRET_ACCESS_KEY', 'rustfsadmin');
+        $rabbitmqHost = $discovery->serviceHost('RABBITMQ_HOST', 'rabbitmq');
+        $seleniumUrl = $discovery->serviceValue('DUSK_DRIVER_URL', 'selenium', "http://127.0.0.1:{$port}/wd/hub");
+        $pusherId = $discovery->templateValue('PUSHER_APP_ID', 'app-id');
+        $pusherKey = $discovery->templateValue('PUSHER_APP_KEY', 'app-key');
+        $pusherSecret = $discovery->templateValue('PUSHER_APP_SECRET', 'app-secret');
+        $pusherHost = $discovery->serviceHost('PUSHER_HOST', 'soketi');
+        $pusherScheme = $discovery->templateValue('PUSHER_SCHEME', 'http');
+
         return match ($service) {
-            'meilisearch' => "MEILISEARCH_HOST=http://127.0.0.1:7700\nMEILISEARCH_INDEX_PREFIX=\${SEARCH_PREFIX}",
-            'typesense' => "TYPESENSE_HOST=127.0.0.1\nTYPESENSE_PORT=8108\nTYPESENSE_PROTOCOL=http\nTYPESENSE_API_KEY=xyz\nTYPESENSE_COLLECTION_PREFIX=\${SEARCH_PREFIX}",
-            'minio' => "MINIO_ENDPOINT=http://127.0.0.1:9000\nMINIO_ACCESS_KEY_ID=sail\nMINIO_SECRET_ACCESS_KEY=password\nMINIO_BUCKET=\${OBJECT_STORAGE_BUCKET}\nMINIO_USE_PATH_STYLE_ENDPOINT=true",
-            'rustfs' => "RUSTFS_ENDPOINT=http://127.0.0.1:9000\nRUSTFS_ACCESS_KEY_ID=rustfsadmin\nRUSTFS_SECRET_ACCESS_KEY=rustfsadmin\nRUSTFS_BUCKET=\${OBJECT_STORAGE_BUCKET}\nRUSTFS_USE_PATH_STYLE_ENDPOINT=true",
-            'rabbitmq' => "QUEUE_CONNECTION=rabbitmq\nRABBITMQ_HOST=127.0.0.1\nRABBITMQ_PORT=5672\nRABBITMQ_QUEUE=\${QUEUE_NAME}",
-            'selenium' => 'DUSK_DRIVER_URL=http://127.0.0.1:4444/wd/hub',
-            'soketi' => "BROADCAST_CONNECTION=pusher\nPUSHER_APP_ID=app-id\nPUSHER_APP_KEY=app-key\nPUSHER_APP_SECRET=app-secret\nPUSHER_HOST=127.0.0.1\nPUSHER_PORT=6001\nPUSHER_SCHEME=http\nVITE_PUSHER_APP_KEY=app-key\nVITE_PUSHER_HOST=127.0.0.1\nVITE_PUSHER_PORT=6001\nVITE_PUSHER_SCHEME=http",
+            'meilisearch' => "MEILISEARCH_HOST={$meilisearchHost}\nMEILISEARCH_INDEX_PREFIX=\${SEARCH_PREFIX}",
+            'typesense' => "TYPESENSE_HOST={$typesenseHost}\nTYPESENSE_PORT={$port}\nTYPESENSE_PROTOCOL={$typesenseProtocol}\nTYPESENSE_API_KEY={$typesenseKey}\nTYPESENSE_COLLECTION_PREFIX=\${SEARCH_PREFIX}",
+            'minio' => "MINIO_ENDPOINT={$minioEndpoint}\nMINIO_ACCESS_KEY_ID={$minioKey}\nMINIO_SECRET_ACCESS_KEY={$minioSecret}\nMINIO_BUCKET=\${OBJECT_STORAGE_BUCKET}\nMINIO_USE_PATH_STYLE_ENDPOINT=true",
+            'rustfs' => "RUSTFS_ENDPOINT={$rustfsEndpoint}\nRUSTFS_ACCESS_KEY_ID={$rustfsKey}\nRUSTFS_SECRET_ACCESS_KEY={$rustfsSecret}\nRUSTFS_BUCKET=\${OBJECT_STORAGE_BUCKET}\nRUSTFS_USE_PATH_STYLE_ENDPOINT=true",
+            'rabbitmq' => "QUEUE_CONNECTION=rabbitmq\nRABBITMQ_HOST={$rabbitmqHost}\nRABBITMQ_PORT={$port}\nRABBITMQ_QUEUE=\${QUEUE_NAME}",
+            'selenium' => "DUSK_DRIVER_URL={$seleniumUrl}",
+            'soketi' => "BROADCAST_CONNECTION=pusher\nPUSHER_APP_ID={$pusherId}\nPUSHER_APP_KEY={$pusherKey}\nPUSHER_APP_SECRET={$pusherSecret}\nPUSHER_HOST={$pusherHost}\nPUSHER_PORT={$port}\nPUSHER_SCHEME={$pusherScheme}\nVITE_PUSHER_APP_KEY={$pusherKey}\nVITE_PUSHER_HOST={$pusherHost}\nVITE_PUSHER_PORT={$port}\nVITE_PUSHER_SCHEME={$pusherScheme}",
             default => throw new LogicException("Unsupported rendered service [{$service}]."),
         };
     }
@@ -206,5 +279,12 @@ final class InstallationFileRenderer
         $lines[] = str_repeat('    ', $depth).']';
 
         return implode("\n", $lines);
+    }
+
+    private function discovery(InstallationSelection|InstallationDiscovery $installation): InstallationDiscovery
+    {
+        return $installation instanceof InstallationDiscovery
+            ? $installation
+            : InstallationDiscovery::explicit($installation);
     }
 }

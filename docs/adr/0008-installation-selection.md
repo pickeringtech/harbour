@@ -11,9 +11,9 @@ SQLite and a general-purpose set of Laravel namespace variables. That was safe,
 but it was not an honest representation of projects using PostgreSQL, MySQL,
 Redis, Mailpit, or other common Laravel development dependencies.
 
-Laravel Sail established a familiar service-selection vocabulary. Harbour has a
-different runtime model, but should not make developers relearn the names of
-those services.
+Laravel Sail established a familiar and effective service-selection vocabulary.
+Harbour serves a different runtime model, but should not make developers
+relearn the names of those services.
 
 ## Decision
 
@@ -26,9 +26,10 @@ Harbour adds SQLite, file/database cache, log/array mail, and `none` choices
 because these are useful native Laravel configurations that do not require a
 service.
 
-Selected infrastructure uses Harbour's `shared` provider by default. This is a
-deliberate difference from Sail: installation configures workspace-safe access
-to existing infrastructure rather than creating a complete container stack.
+Selected infrastructure uses Harbour's `shared` provider by default. Sail is
+excellent at providing a complete, reproducible Docker stack. Harbour's
+deliberately narrower role is to configure workspace-safe access to existing
+infrastructure when many native-PHP worktrees need to run concurrently.
 Projects may subsequently change individual service entries to Docker or add a
 Compose project using Harbour's existing explicit resource configuration.
 

@@ -28,9 +28,9 @@ Harbour configures workers; it does not supervise them.
 
 ## Vite
 
-`VITE_PORT` avoids HMR port collisions. `VITE_HOT_FILE` points inside `.harbour/vite/hot`, preventing a worktree's Vite marker from changing another checkout's asset URL.
+`VITE_PORT` avoids HMR port collisions. Laravel's default `public/hot` file is already inside each checkout, so normal worktrees do not need a custom hot file.
 
-Configure Laravel's Vite instance to use the generated hot-file path if the project overrides Laravel's defaults.
+See [Vite and Reverb](/vite-and-reverb/) for process commands and advanced custom hot-file support.
 
 ## Reverb
 

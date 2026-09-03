@@ -13,8 +13,11 @@ The release acceptance scenario is automated by `composer acceptance`. It
 creates a real Laravel 13 project and two real Git worktrees, installs and runs
 setup concurrently, and proves distinct application/Vite/Reverb ports,
 databases, Redis/cache/session and queue names, cache locks, Docker containers,
-and Compose projects. It tears down A while proving B remains operational, then
-repeats cleanup after a failing `after_setup` hook.
+and Compose projects. It launches real Vite and Reverb processes in both
+worktrees, verifies separate checkout-local hot files and listeners, tears down
+A while proving B remains operational, then repeats cleanup after a failing
+`after_setup` hook. The fixture also runs `workspace:install --detect` against
+a real Laravel application before committing its policy.
 
 The CI acceptance job uses PostgreSQL, phpredis, Redis, Docker, and Compose. A
 local run needs those services and extensions, or may deliberately substitute

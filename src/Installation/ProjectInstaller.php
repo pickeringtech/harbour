@@ -25,19 +25,22 @@ final readonly class ProjectInstaller
         private InstallationFileRenderer $renderer = new InstallationFileRenderer,
     ) {}
 
-    public function install(InstallationSelection $selection): InstallationResult
+    public function install(InstallationSelection|InstallationDiscovery $installation): InstallationResult
     {
+        $discovery = $installation instanceof InstallationSelection
+            ? InstallationDiscovery::explicit($installation)
+            : $installation;
         $created = [];
         $updated = [];
         $unchanged = [];
         $conflicts = [];
 
-        $this->writeIfMissing('.env.harbour', $this->renderer->environment($selection), $created, $unchanged);
-        $this->writeIfMissing('config/harbour.php', $this->renderer->configuration($selection), $created, $unchanged);
+        $this->writeIfMissing('.env.harbour', $this->renderer->environment($discovery), $created, $unchanged);
+        $this->writeIfMissing('config/harbour.php', $this->renderer->configuration($discovery), $created, $unchanged);
         $this->updateGitignore($updated, $unchanged);
         $this->updateComposer($updated, $unchanged, $conflicts);
 
-        return new InstallationResult($created, $updated, $unchanged, $conflicts, $selection);
+        return new InstallationResult($created, $updated, $unchanged, $conflicts, $discovery->selection, $discovery->metadata());
     }
 
     /**

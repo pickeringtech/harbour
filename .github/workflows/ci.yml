@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
@@ -209,7 +210,11 @@ jobs:
         working-directory: /tmp/harbour-app
       - run: php artisan list --format=json | grep -q workspace:setup
         working-directory: /tmp/harbour-app
-      - run: php artisan workspace:install --database=sqlite --cache=file --mail=log --json
+      - name: Auto-detect and install Harbour project configuration
+        run: |
+          php artisan workspace:install --detect --json | tee /tmp/harbour-install.json
+          grep -q '"detected":true' /tmp/harbour-install.json
+          grep -q '"database":"sqlite"' /tmp/harbour-install.json
         working-directory: /tmp/harbour-app
       - name: Exercise setup and teardown in the fresh application
         working-directory: /tmp/harbour-app
@@ -245,10 +250,14 @@ jobs:
       POSTGRES_PASSWORD: harbour
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: mbstring, pdo_pgsql, redis
+          extensions: mbstring, pdo_sqlite, pdo_pgsql, redis
           coverage: none
       - uses: ramsey/composer-install@v4
       - run: composer acceptance

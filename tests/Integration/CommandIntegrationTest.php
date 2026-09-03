@@ -7,12 +7,14 @@ namespace PickeringTech\Harbour\Tests\Integration;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Testing\PendingCommand;
+use PickeringTech\Harbour\Console\InstallCommand;
 use PickeringTech\Harbour\Contracts\WorkspaceIdentityStrategy;
 use PickeringTech\Harbour\Identity\WorkspaceContext;
 use PickeringTech\Harbour\Identity\WorkspaceIdentity;
 use PickeringTech\Harbour\Tests\TestCase;
 use PickeringTech\Harbour\WorkspaceManager;
 use RuntimeException;
+use Symfony\Component\Console\Tester\CommandTester;
 
 final class CommandIntegrationTest extends TestCase
 {
@@ -47,31 +49,13 @@ final class CommandIntegrationTest extends TestCase
         unlink($this->workspaceDirectory.'/.env.harbour');
         file_put_contents($this->workspaceDirectory.'/composer.json', "{\n    \"name\": \"acme/app\"\n}\n");
 
-        $command = $this->artisan('workspace:install');
-        self::assertInstanceOf(PendingCommand::class, $command);
-        $command
-            ->expectsChoice(
-                'Which database should Harbour isolate?',
-                'PostgreSQL',
-                ['None', 'SQLite', 'MySQL', 'MariaDB', 'PostgreSQL', 'MongoDB'],
-            )
-            ->expectsChoice(
-                'Which cache and shared-state store should Laravel use?',
-                'Redis',
-                ['None', 'File', 'Database', 'Redis', 'Valkey', 'Memcached'],
-            )
-            ->expectsChoice(
-                'Which mail transport should Laravel use locally?',
-                'Mailpit',
-                ['None', 'Log', 'Mailpit'],
-            )
-            ->expectsChoice(
-                'Which additional shared services should Harbour configure?',
-                ['Meilisearch', 'Selenium'],
-                ['Meilisearch', 'Typesense', 'MinIO', 'RustFS', 'RabbitMQ', 'Selenium', 'Soketi'],
-            )
-            ->assertSuccessful()
-            ->run();
+        $command = $this->application()->make(InstallCommand::class);
+        $command->setLaravel($this->application());
+        $tester = new CommandTester($command);
+        $tester->setInputs(['no', 'PostgreSQL', 'Redis', 'Mailpit', 'Meilisearch,Selenium']);
+
+        self::assertSame(0, $tester->execute([]), $tester->getDisplay());
+        self::assertStringContainsString('No external infrastructure configuration was detected.', $tester->getDisplay());
 
         $environment = (string) file_get_contents($this->workspaceDirectory.'/.env.harbour');
         self::assertStringContainsString('DB_CONNECTION=pgsql', $environment);
@@ -88,6 +72,84 @@ final class CommandIntegrationTest extends TestCase
         self::assertSame(1, Artisan::call('workspace:install', ['--json' => true]));
         self::assertStringContainsString('INSTALL_SELECTION_REQUIRED', Artisan::output());
         self::assertFileDoesNotExist($this->workspaceDirectory.'/config/harbour.php');
+    }
+
+    public function test_detect_option_accepts_sail_configuration_without_prompts(): void
+    {
+        unlink($this->workspaceDirectory.'/.env.harbour');
+        file_put_contents($this->workspaceDirectory.'/composer.json', <<<'JSON'
+        {
+            "name": "acme/app",
+            "require-dev": {"laravel/sail": "^1.0"}
+        }
+        JSON);
+        file_put_contents($this->workspaceDirectory.'/compose.yaml', <<<'YAML'
+        services:
+          laravel.test:
+            image: sail-8.4/app
+          pgsql:
+            image: postgres:17
+          redis:
+            image: redis:alpine
+          mailpit:
+            image: axllent/mailpit
+        YAML);
+        file_put_contents($this->workspaceDirectory.'/.env', <<<'ENV'
+        DB_CONNECTION=pgsql
+        DB_HOST=pgsql
+        DB_PORT=5432
+        CACHE_STORE=redis
+        REDIS_HOST=redis
+        REDIS_PORT=6379
+        MAIL_MAILER=smtp
+        MAIL_HOST=mailpit
+        MAIL_PORT=1025
+        FORWARD_DB_PORT=15432
+        ENV);
+
+        self::assertSame(0, Artisan::call('workspace:install', ['--detect' => true, '--json' => true]));
+        $output = Artisan::output();
+
+        self::assertStringContainsString('"database":"pgsql"', $output);
+        self::assertStringContainsString('"services":["pgsql","redis","mailpit"]', $output);
+        self::assertStringContainsString('"detected":true', $output);
+        self::assertStringContainsString('"sail:compose.yaml"', $output);
+        self::assertStringContainsString('DB_PORT=15432', (string) file_get_contents($this->workspaceDirectory.'/.env.harbour'));
+    }
+
+    public function test_interactive_install_accepts_the_detected_proposal_with_one_answer(): void
+    {
+        unlink($this->workspaceDirectory.'/.env.harbour');
+        file_put_contents($this->workspaceDirectory.'/composer.json', "{\n    \"name\": \"acme/app\"\n}\n");
+        file_put_contents($this->workspaceDirectory.'/herd.yml', "services:\n  redis:\n    version: 7.4\n    port: 16379\n");
+        file_put_contents($this->workspaceDirectory.'/.env', "CACHE_STORE=redis\nREDIS_PORT=16379\nMAIL_MAILER=log\n");
+
+        $command = $this->application()->make(InstallCommand::class);
+        $command->setLaravel($this->application());
+        $tester = new CommandTester($command);
+        $tester->setInputs(['yes']);
+
+        self::assertSame(0, $tester->execute([]), $tester->getDisplay());
+        self::assertStringContainsString('Harbour detected this project configuration.', $tester->getDisplay());
+        self::assertStringContainsString('Detected from', $tester->getDisplay());
+        self::assertStringContainsString('REDIS_PORT=16379', (string) file_get_contents($this->workspaceDirectory.'/.env.harbour'));
+    }
+
+    public function test_explicit_options_override_only_the_requested_detected_categories(): void
+    {
+        unlink($this->workspaceDirectory.'/.env.harbour');
+        file_put_contents($this->workspaceDirectory.'/composer.json', "{\n    \"name\": \"acme/app\"\n}\n");
+        file_put_contents($this->workspaceDirectory.'/.env', "DB_CONNECTION=pgsql\nCACHE_STORE=redis\nMAIL_MAILER=log\nMEILISEARCH_HOST=http://127.0.0.1:7700\n");
+
+        self::assertSame(0, Artisan::call('workspace:install', [
+            '--detect' => true,
+            '--database' => 'sqlite',
+            '--json' => true,
+        ]));
+        $output = Artisan::output();
+
+        self::assertStringContainsString('"database":"sqlite"', $output);
+        self::assertStringContainsString('"services":["redis","meilisearch"]', $output);
     }
 
     public function test_sail_compatible_with_option_and_short_category_flags_are_supported(): void

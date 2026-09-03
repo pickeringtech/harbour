@@ -40,7 +40,10 @@ final class ProjectInstallerTest extends TestCase
         self::assertSame($selection->toArray(), $first->selection->toArray());
         $configuration = require $this->workspace.'/config/harbour.php';
         self::assertIsArray($configuration);
-        self::assertSame($selection->toArray(), $configuration['installation']);
+        self::assertSame([
+            ...$selection->toArray(),
+            'discovery' => ['detected' => false, 'sources' => []],
+        ], $configuration['installation']);
         $database = $configuration['database'] ?? null;
         self::assertIsArray($database);
         self::assertSame('sqlite', $database['connection']);

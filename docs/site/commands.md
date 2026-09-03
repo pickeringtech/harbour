@@ -10,10 +10,13 @@ php artisan workspace:install
 
 Purpose: interactively select the project's infrastructure and perform the one-time, non-destructive scaffolding required before Harbour can be used consistently across worktrees. Existing configuration and scripts are preserved.
 
+With no options, the command first discovers Sail, Compose, Herd, and Laravel environment configuration and offers one proposal. Use `--detect` to accept that proposal without interaction.
+
 For deterministic automation:
 
 ```bash
 php artisan workspace:install \
+    --detect \
     -d postgresql \
     -c redis \
     -m mailpit \
@@ -25,11 +28,12 @@ Options:
 
 | Option | Choices | Purpose |
 | --- | --- | --- |
+| `--detect` | — | Infer choices and host ports from Sail, Compose, Herd, `.env`, and `.env.example`. Explicit category flags override the inferred category. |
 | `-d`, `--database` | `none`, `sqlite`, `mysql`, `mariadb`, `pgsql`, `mongodb` | Select the primary datastore. `postgres` and `postgresql` alias `pgsql`. |
 | `-c`, `--cache` | `none`, `file`, `database`, `redis`, `valkey`, `memcached` | Configure cache plus safe session/queue defaults. |
 | `-m`, `--mail` | `none`, `log`, `mailpit` | Configure local mail delivery. |
 | `--with` | Comma-separated Sail service names or `none` | Add search, object storage, RabbitMQ, Selenium, Soketi, or express the entire selection with Sail vocabulary. |
-| `--json` | — | Return the selected stack and file changes using the stable JSON envelope. Explicit selections are required. |
+| `--json` | — | Return the selected stack, discovery sources, and file changes using the stable JSON envelope. Use `--detect` or explicit selections. |
 
 The full Sail-compatible service list is `mysql`, `pgsql`, `mariadb`,
 `mongodb`, `redis`, `valkey`, `memcached`, `meilisearch`, `typesense`, `minio`,

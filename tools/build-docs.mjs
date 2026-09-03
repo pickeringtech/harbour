@@ -8,13 +8,27 @@ const output = path.join(root, 'build/pages')
 const base = normalizeBase(process.env.PAGES_BASE ?? '/harbour/')
 const siteUrl = `https://pickeringtech.github.io${base}`
 const repository = 'https://github.com/pickeringtech/harbour'
+const company = 'https://picktech.co.uk/'
 const pages = [
     { route: '', source: 'docs/site/index.md', title: 'Harbour', description: 'Lightweight isolated Laravel environments for parallel development.' },
     { route: 'getting-started', source: 'docs/site/getting-started.md', title: 'Getting started', description: 'Install Harbour and prepare isolated Laravel workspaces.' },
+    { route: 'workspaces', source: 'docs/site/workspaces.md', title: 'Workspaces', description: 'Use Harbour in clones, primary checkouts, and concurrent Git worktrees.' },
     { route: 'commands', source: 'docs/site/commands.md', title: 'Commands', description: 'Understand every Harbour workspace command and when to run it.' },
     { route: 'configuration', source: 'docs/site/configuration.md', title: 'Configuration', description: 'Configure identity, ports, variables, databases, and hooks.' },
-    { route: 'isolation', source: 'docs/site/isolation.md', title: 'Isolation', description: 'How Harbour isolates databases, Redis, queues, sessions, Vite, and Reverb.' },
+    { route: 'environment-templates', source: 'docs/site/environment-templates.md', title: 'Environment templates', description: 'Resolve variables, preserve environments, and protect secrets.' },
+    { route: 'ports', source: 'docs/site/ports.md', title: 'Ports', description: 'Allocate collision-resistant local ports under real process concurrency.' },
+    { route: 'databases', source: 'docs/site/databases.md', title: 'Databases', description: 'Create and safely remove isolated PostgreSQL, MySQL, MariaDB, and SQLite databases.' },
+    { route: 'laravel-state', source: 'docs/site/laravel-state.md', title: 'Laravel state', description: 'Isolate Redis, cache, locks, sessions, queues, and Horizon.' },
+    { route: 'isolation', source: 'docs/site/isolation.md', title: 'Isolation overview', description: 'A concise overview of Harbour isolation boundaries.' },
+    { route: 'vite-and-reverb', source: 'docs/site/vite-and-reverb.md', title: 'Vite and Reverb', description: 'Run collision-free Vite and Reverb processes in every worktree.' },
+    { route: 'docker', source: 'docs/site/docker.md', title: 'Docker', description: 'Provision an optional isolated container without containerizing Laravel.' },
+    { route: 'docker-compose', source: 'docs/site/docker-compose.md', title: 'Docker Compose', description: 'Run an optional workspace-specific Compose dependency graph.' },
+    { route: 'lifecycle-hooks', source: 'docs/site/lifecycle-hooks.md', title: 'Lifecycle hooks', description: 'Extend setup and teardown through deterministic hooks and Laravel events.' },
+    { route: 'custom-strategies', source: 'docs/site/custom-strategies.md', title: 'Custom strategies', description: 'Replace identity, port allocation, and variable resolution through Laravel DI.' },
+    { route: 'debugging', source: 'docs/site/debugging.md', title: 'Debugging', description: 'Inspect status, variable provenance, machine output, and partial failures.' },
     { route: 'integrations', source: 'docs/site/integrations.md', title: 'Integrations', description: 'Use Harbour with Git worktrees, Orca, Herdr, Sail, Docker, and Compose.' },
+    { route: 'orca', source: 'docs/site/orca.md', title: 'Orca', description: 'Connect Orca worktree lifecycle to Harbour workspace setup and teardown.' },
+    { route: 'herdr', source: 'docs/site/herdr.md', title: 'Herdr', description: 'Connect Herdr worktrees and services to Harbour safely.' },
     { route: 'safety', source: 'docs/site/safety.md', title: 'Safety', description: 'Harbour resource ownership, environment preservation, and production safeguards.' },
     { route: 'architecture', source: 'docs/site/architecture.md', title: 'Architecture', description: 'Harbour lifecycle, domain boundaries, and architectural decisions.' },
 ]
@@ -48,6 +62,7 @@ console.log(`Built ${pages.length} documentation pages in ${path.relative(root, 
 function layout(page, content) {
     const canonical = `${siteUrl}${page.route === '' ? '' : `${page.route}/`}`
     const nav = pages.slice(1).map(item => `<a${item.route === page.route ? ' aria-current="page"' : ''} href="${base}${item.route}/">${escapeHtml(item.title)}</a>`).join('')
+    const headerNav = pages.filter(item => ['getting-started', 'commands', 'architecture'].includes(item.route)).map(item => `<a${item.route === page.route ? ' aria-current="page"' : ''} href="${base}${item.route}/">${escapeHtml(item.title)}</a>`).join('')
     const title = page.route === '' ? 'Harbour — isolated Laravel workspaces' : `${page.title} — Harbour`
 
     return `<!doctype html>
@@ -69,13 +84,13 @@ function layout(page, content) {
 <body>
     <header class="site-header">
         <a class="brand" href="${base}" aria-label="Harbour home"><span>H</span>Harbour</a>
-        <nav aria-label="Documentation">${nav}<a href="${repository}">GitHub ↗</a></nav>
+        <nav aria-label="Primary documentation">${headerNav}<a href="${repository}">GitHub ↗</a></nav>
     </header>
     <div class="layout">
         <aside aria-label="Documentation sections">${nav}</aside>
         <main>${content}</main>
     </div>
-    <footer><span>Harbour is open-source software released under the MIT License.</span><a href="${repository}">View on GitHub</a></footer>
+    <footer><span>Made with love by <a href="${company}">Pickering Technologies (PickTech)</a>. Harbour is released under the MIT License.</span><a href="${repository}">View on GitHub</a></footer>
 </body>
 </html>
 `

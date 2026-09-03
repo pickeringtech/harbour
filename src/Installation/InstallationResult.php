@@ -18,9 +18,11 @@ final readonly class InstallationResult
         public array $unchanged,
         public array $conflicts,
         public InstallationSelection $selection,
+        /** @var array{detected: bool, sources: list<string>} */
+        public array $discovery = ['detected' => false, 'sources' => []],
     ) {}
 
-    /** @return array{created: list<string>, updated: list<string>, unchanged: list<string>, conflicts: list<string>, selection: array{database: string, cache: string, mail: string, services: list<string>, provider: string}} */
+    /** @return array{created: list<string>, updated: list<string>, unchanged: list<string>, conflicts: list<string>, selection: array{database: string, cache: string, mail: string, services: list<string>, provider: string}, discovery: array{detected: bool, sources: list<string>}} */
     public function toArray(): array
     {
         return [
@@ -29,6 +31,7 @@ final readonly class InstallationResult
             'unchanged' => $this->unchanged,
             'conflicts' => $this->conflicts,
             'selection' => $this->selection->toArray(),
+            'discovery' => $this->discovery,
         ];
     }
 }
