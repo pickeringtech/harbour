@@ -26,7 +26,7 @@ jobs:
           php-version: ${{ matrix.php }}
           extensions: mbstring, pdo_sqlite
           coverage: none
-      - uses: ramsey/composer-install@v3
+      - uses: ramsey/composer-install@v4
       - run: composer validate --strict
       - run: composer format:check
       - run: composer analyse
@@ -70,7 +70,7 @@ jobs:
           php-version: '8.4'
           extensions: mbstring, pdo_sqlite, pdo_pgsql, pdo_mysql
           coverage: none
-      - uses: ramsey/composer-install@v3
+      - uses: ramsey/composer-install@v4
       - run: composer test:integration
 
   docker:
@@ -85,7 +85,7 @@ jobs:
           php-version: '8.4'
           extensions: mbstring, pdo_sqlite
           coverage: none
-      - uses: ramsey/composer-install@v3
+      - uses: ramsey/composer-install@v4
       - run: docker compose version
       - run: vendor/bin/phpunit tests/Integration/DockerIntegrationTest.php
 
@@ -99,9 +99,9 @@ jobs:
           php-version: '8.4'
           extensions: mbstring, pdo_sqlite
           coverage: pcov
-      - uses: ramsey/composer-install@v3
+      - uses: ramsey/composer-install@v4
       - run: vendor/bin/phpunit --coverage-clover build/coverage.xml --coverage-text
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: coverage
           path: build/coverage.xml
@@ -116,7 +116,7 @@ jobs:
           php-version: '8.4'
           extensions: mbstring, pdo_sqlite
           coverage: pcov
-      - uses: ramsey/composer-install@v3
+      - uses: ramsey/composer-install@v4
       - run: composer mutate
 
   installability:
