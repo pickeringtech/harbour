@@ -73,6 +73,21 @@ final class ReleaseGitTagPublisherTest extends TestCase
         self::assertFalse($publisher->createTagReference($tag));
     }
 
+    public function test_it_normalizes_crlf_and_a_missing_final_newline_in_the_signing_secret(): void
+    {
+        $privateKey = str_replace("\n", "\r\n", rtrim($this->privateKey, "\n"));
+        $entry = new ReleaseEntry('v1.2.3', $this->commit);
+
+        $tag = $this->publisher($privateKey)->createTagObject($entry);
+
+        self::assertTrue($tag->annotated);
+        self::assertSame($entry->commit, $tag->commit);
+        self::assertStringContainsString(
+            '-----BEGIN SSH SIGNATURE-----',
+            $this->git(['cat-file', '-p', $tag->objectSha]),
+        );
+    }
+
     public function test_it_reuses_only_an_exact_existing_local_tag(): void
     {
         $publisher = $this->publisher();
@@ -109,13 +124,13 @@ final class ReleaseGitTagPublisherTest extends TestCase
         );
     }
 
-    private function publisher(): GitTagPublisher
+    private function publisher(?string $privateKey = null): GitTagPublisher
     {
         return new GitTagPublisher(
             $this->directory,
             'pickeringtech/harbour',
             'token',
-            $this->privateKey,
+            $privateKey ?? $this->privateKey,
             'rpickz',
             '31162594+rpickz@users.noreply.github.com',
             'file://'.$this->remote,
