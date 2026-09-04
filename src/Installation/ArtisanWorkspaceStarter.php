@@ -58,6 +58,16 @@ final readonly class ArtisanWorkspaceStarter implements InstalledWorkspaceStarte
             };
         $result = $this->processes->run($command, $this->workspacePath, [], $stream);
         if (! $result->successful()) {
+            $reported = self::errorFromOutput($result->output);
+            if ($reported !== null) {
+                throw new HarbourException(
+                    $reported->errorCode,
+                    $reported->getMessage(),
+                    [...$reported->context, ...ProcessFailure::context($result)],
+                    $reported,
+                );
+            }
+
             throw new HarbourException(
                 ErrorCode::ProcessFailed,
                 'Harbour project files were created, but the workspace could not be started. Run composer workspace:setup to retry.',
@@ -77,6 +87,62 @@ final readonly class ArtisanWorkspaceStarter implements InstalledWorkspaceStarte
     public static function workspaceFromOutput(string $output, array $context = []): array
     {
         $workspace = null;
+
+        foreach (self::payloads($output) as $payload) {
+            $candidate = $payload['workspace'] ?? null;
+            if (is_array($candidate) && ! array_is_list($candidate) && ($payload['ok'] ?? null) === true) {
+                $workspace = [];
+                foreach ($candidate as $key => $value) {
+                    if (is_string($key)) {
+                        $workspace[$key] = $value;
+                    }
+                }
+            }
+        }
+
+        if ($workspace === null) {
+            throw new HarbourException(
+                ErrorCode::ProcessFailed,
+                'Harbour setup completed without a valid workspace status payload. Run composer workspace:setup to retry or composer workspace:status to inspect it.',
+                $context,
+            );
+        }
+
+        return $workspace;
+    }
+
+    private static function errorFromOutput(string $output): ?HarbourException
+    {
+        $reported = null;
+
+        foreach (self::payloads($output) as $payload) {
+            $error = $payload['error'] ?? null;
+            if (($payload['ok'] ?? null) !== false || ! is_array($error)) {
+                continue;
+            }
+            $code = is_string($error['code'] ?? null) ? ErrorCode::tryFrom($error['code']) : null;
+            $message = $error['message'] ?? null;
+            $context = $error['context'] ?? [];
+            if ($code === null || ! is_string($message) || $message === '' || ! is_array($context)) {
+                continue;
+            }
+
+            $safeContext = [];
+            foreach ($context as $key => $value) {
+                if (is_string($key)) {
+                    $safeContext[$key] = $value;
+                }
+            }
+            $reported = new HarbourException($code, $message, $safeContext);
+        }
+
+        return $reported;
+    }
+
+    /** @return list<array<string, mixed>> */
+    private static function payloads(string $output): array
+    {
+        $payloads = [];
         $length = strlen($output);
 
         for ($start = 0; $start < $length; $start++) {
@@ -111,14 +177,14 @@ final readonly class ArtisanWorkspaceStarter implements InstalledWorkspaceStarte
                     } catch (JsonException) {
                         break;
                     }
-                    $candidate = is_array($payload) ? ($payload['workspace'] ?? null) : null;
-                    if (is_array($candidate) && ! array_is_list($candidate) && ($payload['ok'] ?? null) === true) {
-                        $workspace = [];
-                        foreach ($candidate as $key => $value) {
+                    if (is_array($payload) && ! array_is_list($payload)) {
+                        $safePayload = [];
+                        foreach ($payload as $key => $value) {
                             if (is_string($key)) {
-                                $workspace[$key] = $value;
+                                $safePayload[$key] = $value;
                             }
                         }
+                        $payloads[] = $safePayload;
                     }
 
                     break;
@@ -126,14 +192,6 @@ final readonly class ArtisanWorkspaceStarter implements InstalledWorkspaceStarte
             }
         }
 
-        if ($workspace === null) {
-            throw new HarbourException(
-                ErrorCode::ProcessFailed,
-                'Harbour setup completed without a valid workspace status payload. Run composer workspace:setup to retry or composer workspace:status to inspect it.',
-                $context,
-            );
-        }
-
-        return $workspace;
+        return $payloads;
     }
 }

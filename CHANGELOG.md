@@ -6,6 +6,14 @@ All notable changes will be documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Interactive installation now preserves the exact structured setup failure
+  instead of replacing it with a generic retry message.
+- Database setup can safely recover a structurally valid ownership marker from
+  the same workspace after local Harbour state was lost, while markers from
+  other workspaces or unowned databases remain protected.
+
 ## [0.0.5] - 2026-09-04
 
 ### Added

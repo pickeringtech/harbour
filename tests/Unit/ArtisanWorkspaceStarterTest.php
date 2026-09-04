@@ -59,6 +59,36 @@ final class ArtisanWorkspaceStarterTest extends TestCase
         }
     }
 
+    public function test_it_preserves_the_structured_setup_error_reported_by_the_child_command(): void
+    {
+        $output = "PHP warning before JSON\n".json_encode([
+            'version' => 1,
+            'ok' => false,
+            'error' => [
+                'code' => ErrorCode::DatabaseCreationFailed->value,
+                'message' => 'Refusing to claim an existing workspace database.',
+                'context' => ['database' => 'harbour_test'],
+            ],
+        ], JSON_THROW_ON_ERROR);
+        $starter = new ArtisanWorkspaceStarter(
+            $this->directory,
+            new RecordingStarterRunner(new ProcessResult(1, $output, 'Container pgsql Healthy')),
+        );
+
+        try {
+            $starter->start();
+            self::fail('Expected the reported setup error.');
+        } catch (HarbourException $exception) {
+            self::assertSame(ErrorCode::DatabaseCreationFailed, $exception->errorCode);
+            self::assertSame('Refusing to claim an existing workspace database.', $exception->getMessage());
+            self::assertSame([
+                'database' => 'harbour_test',
+                'exit_code' => 1,
+                'stderr' => 'Container pgsql Healthy',
+            ], $exception->context);
+        }
+    }
+
     public function test_it_rejects_a_missing_or_symlinked_artisan_file(): void
     {
         unlink($this->directory.'/artisan');
