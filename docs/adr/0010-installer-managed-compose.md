@@ -35,9 +35,18 @@ before database creation and migrations. Thus a database driver never races a
 container that is still starting, and partial Compose failure retains enough
 state for safe teardown.
 
-Existing `docker-compose.harbour.yml` files are never overwritten. Teardown
+Existing `docker-compose.harbour.yml` files are never overwritten by default.
+An explicit installer `--reconfigure` may replace only files carrying Harbour's
+generated-file marker; unmarked project files remain protected. Teardown
 uses the persisted project identity and snapshot, verifies Compose project
 labels, and does not remove volumes by default.
+
+Every supported dependency is defined once as a structured installation
+service: group/label, aliases, image, ports and `FORWARD_*` variables, Compose
+environment, volume, healthcheck, environment keys, and SQL lifecycle
+capability. TUI choices, detection, generated policy, and Compose rendering are
+projections of that definition. Discovery remains a documented Sail/Herd YAML
+subset rather than a general parser or a collection of per-service regexes.
 
 ## Consequences
 

@@ -40,7 +40,7 @@ final readonly class WorkspaceState
 
     public function withAllocation(string $name, int $port): self
     {
-        return $this->copy(allocations: [...$this->allocations, $name => $port]);
+        return $this->copyKeepingError(allocations: [...$this->allocations, $name => $port]);
     }
 
     public function withResource(OwnedResource $resource): self
@@ -52,39 +52,50 @@ final readonly class WorkspaceState
         $resources = array_values(array_filter($this->resources, static fn (OwnedResource $existing): bool => $existing->id !== $resource->id));
         $resources[] = $resource;
 
-        return $this->copy(resources: $resources);
+        return $this->copyKeepingError(resources: $resources);
     }
 
     /** @param array<string, string> $variables */
     public function withVariables(array $variables): self
     {
-        return $this->copy(variables: $variables);
+        return $this->copyKeepingError(variables: $variables);
     }
 
     /** @param array<string, bool|int|string|null> $environment */
     public function withEnvironment(array $environment): self
     {
-        return $this->copy(environment: $environment);
+        return $this->copyKeepingError(environment: $environment);
+    }
+
+    public function resource(ResourceType $type): ?OwnedResource
+    {
+        foreach ($this->resources as $resource) {
+            if ($resource->type === $type) {
+                return $resource;
+            }
+        }
+
+        return null;
     }
 
     public function ready(): self
     {
-        return $this->copy(status: 'ready', errorCode: null);
+        return $this->copyReplacingError(null, status: 'ready');
     }
 
     public function preparing(): self
     {
-        return $this->copy(status: 'preparing');
+        return $this->copyKeepingError(status: 'preparing');
     }
 
     public function failed(string $errorCode): self
     {
-        return $this->copy(status: 'failed', errorCode: $errorCode);
+        return $this->copyReplacingError($errorCode, status: 'failed');
     }
 
     public function tearingDown(): self
     {
-        return $this->copy(status: 'tearing_down');
+        return $this->copyKeepingError(status: 'tearing_down');
     }
 
     /** @return array<string, mixed> */
@@ -219,13 +230,46 @@ final readonly class WorkspaceState
      * @param  array<string, string>|null  $variables
      * @param  array<string, bool|int|string|null>|null  $environment
      */
-    private function copy(
+    private function copyKeepingError(
         ?string $status = null,
         ?array $allocations = null,
         ?array $resources = null,
         ?array $variables = null,
         ?array $environment = null,
-        string|false|null $errorCode = false,
+    ): self {
+        return $this->copy($this->errorCode, $status, $allocations, $resources, $variables, $environment);
+    }
+
+    /**
+     * @param  array<string, int>|null  $allocations
+     * @param  list<OwnedResource>|null  $resources
+     * @param  array<string, string>|null  $variables
+     * @param  array<string, bool|int|string|null>|null  $environment
+     */
+    private function copyReplacingError(
+        ?string $errorCode,
+        ?string $status = null,
+        ?array $allocations = null,
+        ?array $resources = null,
+        ?array $variables = null,
+        ?array $environment = null,
+    ): self {
+        return $this->copy($errorCode, $status, $allocations, $resources, $variables, $environment);
+    }
+
+    /**
+     * @param  array<string, int>|null  $allocations
+     * @param  list<OwnedResource>|null  $resources
+     * @param  array<string, string>|null  $variables
+     * @param  array<string, bool|int|string|null>|null  $environment
+     */
+    private function copy(
+        ?string $errorCode,
+        ?string $status,
+        ?array $allocations,
+        ?array $resources,
+        ?array $variables,
+        ?array $environment,
     ): self {
         return new self(
             $this->version,
@@ -236,7 +280,7 @@ final readonly class WorkspaceState
             $resources ?? $this->resources,
             $variables ?? $this->variables,
             $environment ?? $this->environment,
-            $errorCode === false ? $this->errorCode : $errorCode,
+            $errorCode,
         );
     }
 }

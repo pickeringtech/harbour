@@ -105,6 +105,17 @@ final class ArtisanWorkspaceStarterTest extends TestCase
         }
     }
 
+    public function test_it_extracts_the_last_valid_setup_payload_after_stdout_noise(): void
+    {
+        $output = "Deprecated: package warning\n{\"ok\":true,\"workspace\":{\"slug\":\"first\"}}\nnoise\n{\"version\":1,\"ok\":true,\"workspace\":{\"slug\":\"last\"}}\n";
+
+        self::assertSame('last', ArtisanWorkspaceStarter::workspaceFromOutput($output)['slug']);
+
+        $runner = new RecordingStarterRunner(new ProcessResult(0, $output));
+        (new ArtisanWorkspaceStarter($this->directory, $runner))->start(static function (string $type, string $buffer): void {});
+        self::assertContains('--stream', $runner->command);
+    }
+
     public function test_it_reports_config_clear_stderr_and_rejects_a_symlinked_cache(): void
     {
         mkdir($this->directory.'/bootstrap/cache', 0700, true);
@@ -145,7 +156,11 @@ final class RecordingStarterRunner implements CommandRunner
 
     public function __construct(private readonly ProcessResult $result) {}
 
-    public function run(array $command, string $workingDirectory, array $environment = []): ProcessResult
+    /**
+     * @param  list<string>  $command
+     * @param  array<string, string>  $environment
+     */
+    public function run(array $command, string $workingDirectory, array $environment = [], ?callable $output = null): ProcessResult
     {
         $this->command = $command;
         $this->workingDirectory = $workingDirectory;
@@ -162,7 +177,11 @@ final class SequenceStarterRunner implements CommandRunner
     /** @param list<ProcessResult> $results */
     public function __construct(private array $results) {}
 
-    public function run(array $command, string $workingDirectory, array $environment = []): ProcessResult
+    /**
+     * @param  list<string>  $command
+     * @param  array<string, string>  $environment
+     */
+    public function run(array $command, string $workingDirectory, array $environment = [], ?callable $output = null): ProcessResult
     {
         $this->commands[] = $command;
 

@@ -91,7 +91,11 @@ Add another named allocation by adding another range. Reservations are coordinat
 ],
 ```
 
-With a null connection, Harbour reads `DB_CONNECTION` from the template and then uses Laravel's connection configuration. Normal migrations run by default. Seeding is opt-in.
+With a null connection, Harbour reads `DB_CONNECTION` from the template and then uses Laravel's connection configuration. Normal migrations run by default. Seeding is opt-in and runs once per fresh workspace; `workspace:setup --seed` requests an intentional repeat.
+
+Harbour parses this policy once into typed configuration at the container
+boundary. Invalid shapes fail with `HARBOUR_INVALID_CONFIGURATION` before a
+lifecycle sequence mutates external state.
 
 ## Variables
 

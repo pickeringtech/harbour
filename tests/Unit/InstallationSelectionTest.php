@@ -11,6 +11,7 @@ use PickeringTech\Harbour\Exceptions\HarbourException;
 use PickeringTech\Harbour\Installation\InstallationDiscovery;
 use PickeringTech\Harbour\Installation\InstallationFileRenderer;
 use PickeringTech\Harbour\Installation\InstallationSelection;
+use PickeringTech\Harbour\Installation\InstallationServiceCatalog;
 use ReflectionMethod;
 
 final class InstallationSelectionTest extends TestCase
@@ -60,7 +61,7 @@ final class InstallationSelectionTest extends TestCase
 
     public function test_every_sail_service_is_accepted_by_the_compatible_with_option(): void
     {
-        foreach (InstallationSelection::SAIL_SERVICES as $service) {
+        foreach ((new InstallationServiceCatalog)->names() as $service) {
             $selection = InstallationSelection::fromOptions(null, null, null, $service);
 
             self::assertContains($service, $selection->services());
@@ -112,11 +113,11 @@ final class InstallationSelectionTest extends TestCase
     public function test_every_base_and_optional_service_combination_renders_unique_environment_keys(): void
     {
         $renderer = new InstallationFileRenderer;
-        $additional = InstallationSelection::ADDITIONAL_SERVICES;
+        $additional = InstallationSelection::additionalServices();
 
-        foreach (InstallationSelection::DATABASES as $database) {
-            foreach (InstallationSelection::CACHES as $cache) {
-                foreach (InstallationSelection::MAILERS as $mail) {
+        foreach (InstallationSelection::databases() as $database) {
+            foreach (InstallationSelection::caches() as $cache) {
+                foreach (InstallationSelection::mailers() as $mail) {
                     for ($mask = 0; $mask < (1 << count($additional)); $mask++) {
                         $services = [];
                         foreach ($additional as $index => $service) {
@@ -234,7 +235,7 @@ final class InstallationSelectionTest extends TestCase
 
     public function test_changing_detected_optional_services_discards_their_stale_endpoints_and_credentials(): void
     {
-        $services = InstallationSelection::ADDITIONAL_SERVICES;
+        $services = InstallationSelection::additionalServices();
         $variables = [
             'MEILISEARCH_HOST',
             'TYPESENSE_HOST',

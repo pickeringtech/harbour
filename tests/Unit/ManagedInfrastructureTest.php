@@ -184,7 +184,11 @@ final class ScenarioCommandRunner implements CommandRunner
     /** @param list<ProcessResult> $results */
     public function __construct(private array $results = []) {}
 
-    public function run(array $command, string $workingDirectory, array $environment = []): ProcessResult
+    /**
+     * @param  list<string>  $command
+     * @param  array<string, string>  $environment
+     */
+    public function run(array $command, string $workingDirectory, array $environment = [], ?callable $output = null): ProcessResult
     {
         $this->commands[] = $command;
         $this->environments[] = $environment;

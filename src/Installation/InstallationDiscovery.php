@@ -51,7 +51,7 @@ final readonly class InstallationDiscovery
                 'DB_HOST', 'DB_PORT', 'DB_USERNAME', 'DB_PASSWORD', 'MONGODB_URI', 'MONGODB_PORT',
                 'REDIS_HOST', 'REDIS_PORT', 'REDIS_PASSWORD', 'MEMCACHED_HOST', 'MEMCACHED_PORT',
                 'MAIL_HOST', 'MAIL_PORT', 'MAIL_USERNAME', 'MAIL_PASSWORD', 'MAILPIT_URL',
-                ...array_merge(...array_map(self::serviceVariables(...), InstallationSelection::ADDITIONAL_SERVICES)),
+                ...array_merge(...array_map(self::serviceVariables(...), InstallationSelection::additionalServices())),
             ]);
         }
 
@@ -144,15 +144,10 @@ final readonly class InstallationDiscovery
     /** @return list<string> */
     private static function serviceVariables(string $service): array
     {
-        return match ($service) {
-            'meilisearch' => ['MEILISEARCH_HOST'],
-            'typesense' => ['TYPESENSE_HOST', 'TYPESENSE_PORT', 'TYPESENSE_PROTOCOL', 'TYPESENSE_API_KEY'],
-            'minio' => ['MINIO_ENDPOINT', 'MINIO_ACCESS_KEY_ID', 'MINIO_SECRET_ACCESS_KEY'],
-            'rustfs' => ['RUSTFS_ENDPOINT', 'RUSTFS_ACCESS_KEY_ID', 'RUSTFS_SECRET_ACCESS_KEY'],
-            'rabbitmq' => ['RABBITMQ_HOST', 'RABBITMQ_PORT'],
-            'selenium' => ['DUSK_DRIVER_URL'],
-            'soketi' => ['PUSHER_APP_ID', 'PUSHER_APP_KEY', 'PUSHER_APP_SECRET', 'PUSHER_HOST', 'PUSHER_PORT', 'PUSHER_SCHEME'],
-            default => [],
-        };
+        try {
+            return (new InstallationServiceCatalog)->get($service)->environmentKeys;
+        } catch (\LogicException) {
+            return [];
+        }
     }
 }

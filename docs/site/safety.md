@@ -13,6 +13,9 @@ State is schema-versioned and atomically replaced. Ownership is persisted immedi
 Before replacing `.env`, Harbour stores an exact private backup and its checksum. Teardown restores that original file.
 
 If a developer edits the Harbour-rendered `.env`, ordinary teardown stops before removing resources. Forced teardown archives the modified copy before restoring the original.
+Setup and `workspace:render` also stop before overwriting that edit. Their
+`--force` option authorizes replacement, while leaving all resource ownership
+and path checks intact.
 
 ## Database guards
 

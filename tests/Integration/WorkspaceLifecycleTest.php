@@ -187,6 +187,39 @@ final class WorkspaceLifecycleTest extends TestCase
         $manager->teardown(true);
     }
 
+    public function test_ready_workspace_is_seeded_only_when_explicitly_requested(): void
+    {
+        $config = $this->application()->make(Repository::class);
+        $config->set('harbour.database.enabled', true);
+        $config->set('harbour.database.connection', 'sqlite');
+        $config->set('harbour.database.migrate', false);
+        $config->set('harbour.database.seed', true);
+        $sequence = new WorkspaceSetupSequence;
+        $this->application()->instance(DatabaseManager::class, new DatabaseManager([new OrderedDatabaseDriver($sequence)]));
+        $kernel = $this->createMock(Kernel::class);
+        $kernel->expects(self::exactly(2))->method('call')->with('db:seed', ['--force' => true])->willReturn(0);
+        $this->application()->instance(Kernel::class, $kernel);
+
+        $manager = $this->application()->make(WorkspaceManager::class);
+        $manager->setup();
+        $manager->setup();
+        $manager->setup(seed: true);
+        $manager->teardown(true);
+    }
+
+    public function test_lifecycle_hooks_run_through_the_command_runner(): void
+    {
+        $this->application()->make(Repository::class)->set('harbour.hooks.before_setup', [['hook-command', '--safe']]);
+        $runner = new HookRecordingRunner;
+        $this->application()->instance(CommandRunner::class, $runner);
+
+        $manager = $this->application()->make(WorkspaceManager::class);
+        $manager->setup();
+
+        self::assertContains(['hook-command', '--safe'], $runner->commands);
+        $manager->teardown(true);
+    }
+
     public function test_fresh_setup_recreates_only_owned_sqlite_and_detects_missing_ownership(): void
     {
         if (! extension_loaded('pdo_sqlite')) {
@@ -327,7 +360,11 @@ final readonly class OrderedWorkspaceRunner implements CommandRunner
 {
     public function __construct(private WorkspaceSetupSequence $sequence) {}
 
-    public function run(array $command, string $workingDirectory, array $environment = []): ProcessResult
+    /**
+     * @param  list<string>  $command
+     * @param  array<string, string>  $environment
+     */
+    public function run(array $command, string $workingDirectory, array $environment = [], ?callable $output = null): ProcessResult
     {
         if (in_array('up', $command, true)) {
             $this->sequence->events[] = 'compose';
@@ -374,7 +411,11 @@ final class WorkspaceManagerCommandRunner implements CommandRunner
 
     public int $composeDowns = 0;
 
-    public function run(array $command, string $workingDirectory, array $environment = []): ProcessResult
+    /**
+     * @param  list<string>  $command
+     * @param  array<string, string>  $environment
+     */
+    public function run(array $command, string $workingDirectory, array $environment = [], ?callable $output = null): ProcessResult
     {
         if (($command[0] ?? null) !== 'docker') {
             return new ProcessResult(0, '');
@@ -410,5 +451,22 @@ final class WorkspaceManagerCommandRunner implements CommandRunner
         }
 
         return new ProcessResult(0, 'ok');
+    }
+}
+
+final class HookRecordingRunner implements CommandRunner
+{
+    /** @var list<list<string>> */
+    public array $commands = [];
+
+    /**
+     * @param  list<string>  $command
+     * @param  array<string, string>  $environment
+     */
+    public function run(array $command, string $workingDirectory, array $environment = [], ?callable $output = null): ProcessResult
+    {
+        $this->commands[] = $command;
+
+        return new ProcessResult(0, '');
     }
 }

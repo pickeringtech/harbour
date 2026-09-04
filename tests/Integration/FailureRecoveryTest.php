@@ -20,6 +20,7 @@ use PickeringTech\Harbour\Ports\PortAllocation;
 use PickeringTech\Harbour\Ports\PortRequirement;
 use PickeringTech\Harbour\Process\ProcessResult;
 use PickeringTech\Harbour\State\OwnedResource;
+use PickeringTech\Harbour\State\ResourceType;
 use PickeringTech\Harbour\Tests\TestCase;
 use PickeringTech\Harbour\WorkspaceManager;
 
@@ -81,7 +82,7 @@ final class FailureRecoveryTest extends TestCase
             self::assertSame(ErrorCode::DatabaseCreationFailed, $exception->errorCode);
         }
 
-        self::assertSame('database', $manager->current()?->state()->resources[0]->type);
+        self::assertSame(ResourceType::Database, $manager->current()?->state()->resources[0]->type);
         $manager->teardown(true);
         self::assertSame(1, $driver->destroyed);
         self::assertSame("ORIGINAL=yes\n", file_get_contents($this->workspaceDirectory.'/.env'));
@@ -192,7 +193,7 @@ final class FailureRecoveryTest extends TestCase
             self::assertSame(ErrorCode::ProcessFailed, $exception->errorCode);
         }
 
-        self::assertSame('docker_container', $manager->current()?->state()->resources[0]->type);
+        self::assertSame(ResourceType::DockerContainer, $manager->current()?->state()->resources[0]->type);
         $manager->teardown(true);
         self::assertTrue($runner->removed);
         self::assertSame("ORIGINAL=yes\n", file_get_contents($this->workspaceDirectory.'/.env'));
@@ -334,7 +335,11 @@ final class FailingDockerStartRunner implements CommandRunner
 
     public bool $removed = false;
 
-    public function run(array $command, string $workingDirectory, array $environment = []): ProcessResult
+    /**
+     * @param  list<string>  $command
+     * @param  array<string, string>  $environment
+     */
+    public function run(array $command, string $workingDirectory, array $environment = [], ?callable $output = null): ProcessResult
     {
         if (($command[1] ?? null) === 'create') {
             foreach ($command as $argument) {
@@ -372,7 +377,11 @@ final class RetryDockerCreateRunner implements CommandRunner
     /** @var array<string, string> */
     private array $labels = [];
 
-    public function run(array $command, string $workingDirectory, array $environment = []): ProcessResult
+    /**
+     * @param  list<string>  $command
+     * @param  array<string, string>  $environment
+     */
+    public function run(array $command, string $workingDirectory, array $environment = [], ?callable $output = null): ProcessResult
     {
         if (($command[1] ?? null) === 'create') {
             $this->createAttempts++;

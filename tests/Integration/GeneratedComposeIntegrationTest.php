@@ -11,6 +11,7 @@ use PickeringTech\Harbour\Installation\InstallationFileRenderer;
 use PickeringTech\Harbour\Installation\InstallationSelection;
 use PickeringTech\Harbour\Installation\InstallationServiceCatalog;
 use PickeringTech\Harbour\Process\SymfonyCommandRunner;
+use PickeringTech\Harbour\State\ResourceType;
 use PickeringTech\Harbour\Tests\TestCase;
 use PickeringTech\Harbour\WorkspaceManager;
 
@@ -26,7 +27,7 @@ final class GeneratedComposeIntegrationTest extends TestCase
         $renderer = new InstallationComposeRenderer($catalog);
         $runner = new SymfonyCommandRunner;
 
-        foreach (InstallationSelection::SAIL_SERVICES as $service) {
+        foreach ($catalog->names() as $service) {
             $selection = InstallationSelection::fromOptions(null, null, null, $service, 'compose');
             $file = $this->workspaceDirectory.'/docker-compose.harbour.yml';
             file_put_contents($file, $renderer->render($selection));
@@ -86,7 +87,7 @@ final class GeneratedComposeIntegrationTest extends TestCase
             $this->assertPortOpen($mailPort);
             self::assertCount(1, array_filter(
                 $workspace->state()->resources,
-                static fn ($resource): bool => $resource->type === 'compose_project',
+                static fn ($resource): bool => $resource->type === ResourceType::ComposeProject,
             ));
         } finally {
             $manager->teardown(true);

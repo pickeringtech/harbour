@@ -11,6 +11,7 @@ use PickeringTech\Harbour\Identity\ContextIdentifier;
 use PickeringTech\Harbour\Identity\WorkspaceIdentity;
 use PickeringTech\Harbour\Process\ProcessFailure;
 use PickeringTech\Harbour\State\OwnedResource;
+use PickeringTech\Harbour\State\ResourceType;
 use PickeringTech\Harbour\Support\AtomicFile;
 use PickeringTech\Harbour\Support\WorkspacePath;
 
@@ -40,7 +41,7 @@ final readonly class ComposeManager
         WorkspacePath::assertSafe($workspacePath, $snapshot);
         $this->files->write($snapshot, $contents);
 
-        return new OwnedResource($resourceId, $workspace->id(), 'compose_project', 'compose', [
+        return new OwnedResource($resourceId, $workspace->id(), ResourceType::ComposeProject, 'compose', [
             'name' => $name,
             'project_name' => $project,
             'file' => $snapshot,
@@ -49,14 +50,18 @@ final readonly class ComposeManager
         ]);
     }
 
-    /** @param array<string, string> $environment */
-    public function start(OwnedResource $resource, string $workspacePath, array $environment): void
+    /**
+     * @param  array<string, string>  $environment
+     * @param  null|callable(string, string): void  $output
+     */
+    public function start(OwnedResource $resource, string $workspacePath, array $environment, ?callable $output = null): void
     {
         [$project, $file, $workingDirectory] = $this->evidence($resource, $workspacePath);
         $result = $this->processes->run(
             $this->command($project, $file, $workingDirectory, ['up', '--detach', '--wait', '--wait-timeout', '60']),
             $workingDirectory,
             $environment,
+            $output,
         );
 
         if (! $result->successful()) {
@@ -98,7 +103,7 @@ final readonly class ComposeManager
         $expectedFile = preg_match('/^compose_[a-f0-9]{32}$/', $resource->id)
             ? realpath($workspacePath.'/.harbour/compose/'.$resource->id.'.yml')
             : false;
-        if (! $resource->createdByHarbour || $resource->type !== 'compose_project'
+        if (! $resource->createdByHarbour || $resource->type !== ResourceType::ComposeProject
             || ! is_string($project) || ! preg_match('/^[a-z0-9][a-z0-9_-]{0,62}$/', $project)
             || ! is_string($file) || ! is_file($file) || $expectedFile === false || realpath($file) !== $expectedFile
             || ! is_string($workingDirectory) || realpath($workingDirectory) !== realpath($workspacePath)) {
