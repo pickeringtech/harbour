@@ -196,12 +196,18 @@ final class InstallationFileRenderer
 
     private function cacheEnvironment(string $cache, InstallationDiscovery $discovery): string
     {
-        return match ($cache) {
+        $environment = match ($cache) {
             'none' => "CACHE_STORE=array\nSESSION_DRIVER=array\nQUEUE_CONNECTION=sync",
             'file' => "CACHE_STORE=file\nSESSION_DRIVER=file\nQUEUE_CONNECTION=sync",
             'database' => "CACHE_STORE=database\nSESSION_DRIVER=database\nQUEUE_CONNECTION=database",
             default => $this->renderServiceEnvironment($cache, $discovery),
         };
+
+        if (in_array($cache, ['redis', 'valkey'], true) && $discovery->selection->redisClient !== 'auto') {
+            $environment = 'REDIS_CLIENT='.$discovery->selection->redisClient."\n".$environment;
+        }
+
+        return $environment;
     }
 
     private function mailEnvironment(string $mail, InstallationDiscovery $discovery): string

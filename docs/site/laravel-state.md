@@ -31,4 +31,4 @@ Make Horizon's prefix environment-driven if the project does not already do so:
 'prefix' => env('HORIZON_PREFIX', 'horizon:'),
 ```
 
-Harbour does not supervise queue workers or Horizon. It supplies safe configuration for whichever process manager starts them.
+Harbour does not launch queue workers or Horizon. It supplies safe configuration for whichever process manager starts them.

@@ -57,10 +57,6 @@ abstract class WorkspaceCommand extends Command
                     $this->components->twoColumnDetail(str_replace('_PORT', '', $name), (string) $port);
                 }
             }
-            $appPort = $ports['APP_PORT'] ?? null;
-            if (is_int($appPort)) {
-                $this->line("Start Laravel with <comment>php artisan serve --host=127.0.0.1 --port={$appPort}</comment>.");
-            }
         }
     }
 
@@ -81,10 +77,20 @@ abstract class WorkspaceCommand extends Command
                     'error' => $error->toArray(),
                 ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
             } else {
-                $this->components->error($error->getMessage());
+                if ($error->errorCode === ErrorCode::InstallRequirementsMissing && is_array($error->context['missing'] ?? null)) {
+                    $retry = $error->context['retry_command'] ?? null;
+                    $this->displayMissingRequirements($error->context['missing'], is_string($retry) ? $retry : null);
+                } else {
+                    $this->components->error($error->getMessage());
+                }
                 $stderr = $error->context['stderr'] ?? null;
                 if (is_string($stderr) && $stderr !== '') {
                     $this->line($stderr);
+                }
+                $retry = $error->context['retry_command'] ?? null;
+                if ($error->errorCode !== ErrorCode::InstallRequirementsMissing && is_string($retry)) {
+                    $this->line('Retry without repeating your choices:');
+                    $this->line('  <comment>'.$retry.'</comment>');
                 }
                 if ($this->output->isVerbose()) {
                     $this->line('Error code: '.$error->errorCode->value);
@@ -92,6 +98,34 @@ abstract class WorkspaceCommand extends Command
             }
 
             return self::FAILURE;
+        }
+    }
+
+    /** @param array<mixed> $requirements */
+    private function displayMissingRequirements(array $requirements, ?string $retry): void
+    {
+        $this->components->error('The selected stack still needs the following runtime capabilities:');
+        foreach ($requirements as $requirement) {
+            if (! is_array($requirement)) {
+                continue;
+            }
+            $name = $requirement['name'] ?? null;
+            $purpose = $requirement['purpose'] ?? null;
+            $resolution = $requirement['resolution'] ?? null;
+            if (! is_string($name) || ! is_string($purpose) || ! is_string($resolution)) {
+                continue;
+            }
+
+            $this->newLine();
+            $this->line('  <fg=red>●</> <options=bold>'.$name.'</>');
+            $this->line('    Needed for: '.$purpose);
+            $this->line('    Resolve by: <comment>'.$resolution.'</comment>');
+        }
+        $this->newLine();
+        $this->line('Harbour configuration and workspace resources were not created.');
+        if ($retry !== null) {
+            $this->line('After resolving these requirements, retry without repeating your choices:');
+            $this->line('  <comment>'.$retry.'</comment>');
         }
     }
 }

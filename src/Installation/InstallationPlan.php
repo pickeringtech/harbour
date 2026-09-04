@@ -10,4 +10,9 @@ final readonly class InstallationPlan
         public InstallationDiscovery $discovery,
         public bool $start,
     ) {}
+
+    public function withDiscovery(InstallationDiscovery $discovery): self
+    {
+        return new self($discovery, $this->start);
+    }
 }

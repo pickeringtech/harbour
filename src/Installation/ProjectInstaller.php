@@ -15,6 +15,7 @@ final readonly class ProjectInstaller
     /** @var array<string, list<string>> */
     private const COMPOSER_SCRIPTS = [
         'workspace:setup' => ['@php artisan workspace:setup'],
+        'workspace:dev' => ['@php artisan workspace:dev'],
         'workspace:status' => ['@php artisan workspace:status'],
         'workspace:teardown' => ['@php artisan workspace:teardown'],
     ];

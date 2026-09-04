@@ -17,9 +17,9 @@ previously existed only inside Sail's application container.
 
 ## Decision
 
-`workspace:install` resolves the final `InstallationSelection`, then runs one
-read-only preflight before invoking `ProjectInstaller` or starting the
-workspace. Requirements are conditional on that selection:
+`workspace:install` resolves the final `InstallationSelection`, then inspects
+requirements before invoking `ProjectInstaller` or starting the workspace.
+Requirements are conditional on that selection:
 
 - the selected database determines its PHP driver;
 - Redis and Valkey use the Laravel-configured PhpRedis or Predis client;
@@ -27,9 +27,12 @@ workspace. Requirements are conditional on that selection:
 - selected Laravel integrations require their corresponding Composer clients;
 - Compose mode requires the Docker CLI and Compose v2 plugin.
 
-All missing requirements are collected into one actionable error. Each entry
-names the capability, explains why it is needed, and provides a resolution. The
-machine-readable error code is `HARBOUR_INSTALL_REQUIREMENTS_MISSING`.
+Project-level Composer requirements may be installed in one explicitly approved
+operation, after which the same selection is checked again automatically.
+Machine requirements remain an actionable error: each entry names the
+capability, explains why it is needed, provides platform guidance, and carries
+an exact retry command. The machine-readable error code is
+`HARBOUR_INSTALL_REQUIREMENTS_MISSING`.
 
 There is no force flag that bypasses this check. The installer must not produce
 a policy it already knows the current Laravel runtime cannot execute.
@@ -37,7 +40,9 @@ a policy it already knows the current Laravel runtime cannot execute.
 ## Consequences
 
 - Requirements reflect the user's actual choice rather than Harbour defaults.
-- A failed install leaves project files and infrastructure untouched.
+- A failed machine preflight leaves Harbour policy and infrastructure
+  untouched; an approved Composer remediation remains as an intentional
+  project dependency change.
 - Sail users receive an immediate explanation of host-runtime differences.
 - Adding a supported installer component includes defining and testing its
   runtime requirements.

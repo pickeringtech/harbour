@@ -24,7 +24,7 @@ final readonly class InstallationResult
         public array $reconfigure = [],
     ) {}
 
-    /** @return array{created: list<string>, updated: list<string>, unchanged: list<string>, conflicts: list<string>, selection: array{database: string, cache: string, mail: string, services: list<string>, provider: string}, discovery: array{detected: bool, sources: list<string>}, reconfigure: list<string>} */
+    /** @return array{created: list<string>, updated: list<string>, unchanged: list<string>, conflicts: list<string>, selection: array{database: string, cache: string, mail: string, services: list<string>, provider: string, redis_client: string}, discovery: array{detected: bool, sources: list<string>}, reconfigure: list<string>} */
     public function toArray(): array
     {
         return [

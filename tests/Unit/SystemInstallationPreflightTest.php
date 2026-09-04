@@ -43,7 +43,7 @@ final class SystemInstallationPreflightTest extends TestCase
             self::assertStringContainsString('Composer package meilisearch/meilisearch-php', $exception->getMessage());
             self::assertStringContainsString('Composer package pusher/pusher-php-server', $exception->getMessage());
             self::assertStringContainsString('Docker CLI', $exception->getMessage());
-            self::assertStringContainsString('No project files were changed.', $exception->getMessage());
+            self::assertStringContainsString('Harbour configuration and workspace resources were not created.', $exception->getMessage());
             self::assertSame([
                 'extension:pdo_pgsql',
                 'extension:redis',
@@ -109,6 +109,26 @@ final class SystemInstallationPreflightTest extends TestCase
             self::assertSame(1, count(array_keys($ids, 'package:laravel/scout', true)));
             self::assertSame(1, count(array_keys($ids, 'package:league/flysystem-aws-s3-v3', true)));
         }
+    }
+
+    public function test_it_refreshes_composer_package_evidence_from_the_project_installation(): void
+    {
+        mkdir($this->workspaceDirectory.'/vendor/composer', 0700, true);
+        file_put_contents($this->workspaceDirectory.'/vendor/composer/installed.json', json_encode([
+            'packages' => [
+                ['name' => 'laravel/scout'],
+                ['name' => 'meilisearch/meilisearch-php'],
+            ],
+        ], JSON_THROW_ON_ERROR));
+        $preflight = new SystemInstallationPreflight(
+            $this->application()['config'],
+            new PreflightCommandRunner,
+            $this->workspaceDirectory,
+            [],
+        );
+
+        $preflight->assertReady(new InstallationSelection('none', 'file', 'log', ['meilisearch']));
+        self::addToAssertionCount(1);
     }
 
     /**

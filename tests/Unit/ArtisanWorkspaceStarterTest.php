@@ -10,6 +10,7 @@ use PickeringTech\Harbour\Exceptions\ErrorCode;
 use PickeringTech\Harbour\Exceptions\HarbourException;
 use PickeringTech\Harbour\Installation\ArtisanWorkspaceStarter;
 use PickeringTech\Harbour\Process\ProcessResult;
+use Symfony\Component\Process\Process;
 
 final class ArtisanWorkspaceStarterTest extends TestCase
 {
@@ -116,6 +117,22 @@ final class ArtisanWorkspaceStarterTest extends TestCase
         self::assertContains('--stream', $runner->command);
     }
 
+    public function test_human_streaming_forwards_service_stderr_but_hides_the_internal_json_protocol(): void
+    {
+        $payload = '{"version":1,"ok":true,"workspace":{"slug":"test"}}';
+        $runner = new StreamingStarterRunner(new ProcessResult(0, $payload));
+        $seen = '';
+
+        (new ArtisanWorkspaceStarter($this->directory, $runner))->start(
+            static function (string $type, string $buffer) use (&$seen): void {
+                $seen .= $buffer;
+            },
+        );
+
+        self::assertSame("Container pgsql Healthy\n", $seen);
+        self::assertStringNotContainsString('"workspace"', $seen);
+    }
+
     public function test_it_reports_config_clear_stderr_and_rejects_a_symlinked_cache(): void
     {
         mkdir($this->directory.'/bootstrap/cache', 0700, true);
@@ -186,5 +203,20 @@ final class SequenceStarterRunner implements CommandRunner
         $this->commands[] = $command;
 
         return array_shift($this->results) ?? new ProcessResult(1, '', 'Missing test result.');
+    }
+}
+
+final class StreamingStarterRunner implements CommandRunner
+{
+    public function __construct(private readonly ProcessResult $result) {}
+
+    public function run(array $command, string $workingDirectory, array $environment = [], ?callable $output = null): ProcessResult
+    {
+        if ($output !== null) {
+            $output(Process::ERR, "Container pgsql Healthy\n");
+            $output(Process::OUT, $this->result->output."\n");
+        }
+
+        return $this->result;
     }
 }

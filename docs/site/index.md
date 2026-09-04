@@ -31,14 +31,17 @@ multi-select for optional services and can generate and start a workspace-owned
 Docker Compose stack. With no existing infrastructure, detection offers a
 zero-dependency SQLite/file/log setup.
 
-After those generated project files are reviewed and committed, every developer or agent uses:
+After those generated project files are reviewed and committed, a developer uses:
 
 ```bash
 composer install
-composer workspace:setup
+composer workspace:dev
 ```
 
-`composer install` installs the checkout's PHP dependencies. `composer workspace:setup` creates and configures only that checkout's isolated local environment.
+`composer install` installs the checkout's PHP dependencies. `composer
+workspace:dev` creates the isolated environment and launches Laravel plus Vite
+in one attached session. Agents or IDEs with their own process orchestration use
+`composer workspace:setup` instead.
 
 When the checkout is about to be removed:
 
@@ -50,7 +53,10 @@ This removes Harbour-owned resources and restores the `.env` that existed before
 
 ## Clear ownership boundaries
 
-Harbour does not create worktrees, manage branches or agents, install PHP or Node, or supervise long-running processes. Git, Orca, Herdr, and humans own the checkout. Harbour owns the Laravel environment inside it.
+Harbour does not create worktrees, manage branches or agents, install PHP or
+Node runtimes, or run background application daemons. Git, Orca, Herdr, and
+humans own the checkout. Harbour owns the Laravel environment inside it and can
+keep Laravel plus Vite attached to a developer's current terminal.
 
 ## Learn by concern
 

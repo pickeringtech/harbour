@@ -45,7 +45,8 @@ If the manual selection needs service processes, Harbour asks whether to use
 existing shared infrastructure or generate an isolated Docker Compose stack.
 It then asks whether to set up this workspace immediately. Choosing yes reserves
 ports, starts managed Compose services, creates the logical database, renders
-`.env`, and runs migrations before the installer returns.
+`.env`, and runs migrations. A final prompt can launch Laravel and Vite in the
+same terminal immediately.
 
 ### Selected-stack preflight
 
@@ -53,13 +54,19 @@ Harbour validates requirements only after the user accepts auto-detection or
 finishes manual selection. The proposal itself therefore remains read-only,
 and checks are never based on generic defaults.
 
-The preflight covers the selected SQL or MongoDB driver, the configured Redis
-client, Memcached, client packages for selected Laravel integrations, and the
-Docker CLI plus Compose v2 plugin when Compose was chosen. One failure report
-lists every missing capability, why the selected stack needs it, and the command
-or installation action that resolves it. Harbour exits with
-`HARBOUR_INSTALL_REQUIREMENTS_MISSING` before creating `.env.harbour`, config,
-Compose files, Git ignore entries, or Composer scripts.
+The preflight covers the selected SQL or MongoDB driver, Redis client,
+Memcached, client packages for selected Laravel integrations, and the Docker
+CLI plus Compose v2 plugin when Compose was chosen. Missing Composer packages
+are grouped into one reviewable installation prompt and installed together.
+Harbour then rechecks the selection automatically—there is no need to repeat
+the menus. Redis and Valkey default to Predis so they do not require a native
+PHP extension.
+
+Machine capabilities cannot safely be hidden. If the selected SQL driver is
+not loaded, Harbour reports that single remaining requirement with guidance
+for the detected operating system and prints a retry command containing the
+completed selection. No Harbour configuration or workspace resources are
+created until the recheck passes.
 
 | Selected component | Required application capability |
 | --- | --- |
@@ -67,7 +74,7 @@ Compose files, Git ignore entries, or Composer scripts.
 | MySQL or MariaDB | `pdo_mysql` |
 | PostgreSQL | `pdo_pgsql` |
 | MongoDB | `mongodb` extension and `mongodb/laravel-mongodb` |
-| Redis or Valkey | The configured `redis` extension or `predis/predis` client |
+| Redis or Valkey | `predis/predis` by default; `redis` only for explicit PhpRedis projects |
 | Memcached | `memcached` extension |
 | Meilisearch or Typesense | Laravel Scout and the matching PHP client |
 | MinIO or RustFS | `league/flysystem-aws-s3-v3` |
@@ -109,9 +116,10 @@ by Harbour; `.gitignore`, Composer scripts, and unmarked files remain protected.
 
 ### What discovery does not do
 
-Discovery is read-only. Harbour does not run `sail up`, `herd init`, Docker,
-package managers, or system-service installers. It does not rewrite a Sail or
-Herd file. Sail remains the right tool when a project wants its complete Docker
+Discovery itself is read-only. After the user accepts a selection, Harbour may
+run Composer only with explicit approval. It does not run `sail up`, `herd
+init`, or system package managers, and does not rewrite a Sail or Herd file.
+Sail remains the right tool when a project wants its complete Docker
 development stack; Harbour reuses its published services only when the project
 chooses the lighter native-PHP, parallel-worktree model. Auto-detected policy
 uses existing infrastructure. Harbour creates a Compose file only when the user
@@ -124,9 +132,10 @@ already exist locally. Harbour writes a readable `docker-compose.harbour.yml`
 for the selected services and records every host port as a concurrent Harbour
 allocation. PHP, Artisan, Vite, and Node still run natively.
 
-The final start prompt is explicit. Answer yes to run the newly installed policy
-immediately, or no to review and commit it first. Harbour waits for Compose
-health checks before it creates the workspace database or runs migrations.
+The final setup and launch prompts are explicit. Harbour waits for Compose
+health checks before it creates the workspace database or runs migrations, then
+can start Laravel and Vite as an attached session. Ctrl+C stops those processes
+without tearing down the managed services.
 
 ### Agents and CI
 
@@ -157,6 +166,7 @@ php artisan workspace:install \
     --with=meilisearch,minio \
     --compose \
     --start \
+    --install-dependencies \
     --no-interaction
 ```
 
@@ -164,8 +174,10 @@ php artisan workspace:install \
 
 `--compose` is shorthand for `--provider=compose` and generates a managed
 Compose file. `--provider=shared` records that the service processes already
-exist. `--start` runs `workspace:setup` after scaffolding. All choices are thus
-available without prompts for agents and CI.
+exist. `--install-dependencies` authorizes missing Composer integration
+packages, and `--start` runs `workspace:setup` after scaffolding. `--launch`
+starts an attached Laravel/Vite session and therefore is intended for a human
+terminal rather than JSON output or CI.
 
 Without `--detect` or explicit selections, a non-interactive install stops with
 `HARBOUR_INSTALL_SELECTION_REQUIRED` before writing anything. When protected
@@ -188,10 +200,17 @@ selected. These files describe what every checkout should use; `.env`,
 
 ```bash
 composer install
-composer workspace:setup
+composer workspace:dev
 ```
 
-`composer install` restores the untracked `vendor/` directory in a new checkout. `workspace:setup` identifies that checkout, reserves ports, creates its database and Laravel namespaces, preserves and renders `.env`, starts explicitly configured optional resources, and runs normal migrations.
+`composer install` restores the untracked `vendor/` directory in a new
+checkout. `workspace:dev` sets up the checkout, reserves ports, creates its
+database and Laravel namespaces, preserves and renders `.env`, starts configured
+resources, runs normal migrations, installs missing Node dependencies when Vite
+is present, and launches Laravel plus Vite. Ctrl+C ends the attached processes.
+
+Orchestration tools that launch their own processes should use
+`composer workspace:setup` instead.
 
 Setup is idempotent: running it again converges on the recorded workspace.
 If database seeding is enabled, it runs on first setup and after `--fresh`, but

@@ -110,6 +110,14 @@ final class InstallationSelectionTest extends TestCase
         InstallationSelection::fromOptions('pgsql', 'none', 'none', 'none', 'kubernetes');
     }
 
+    public function test_unknown_redis_client_is_rejected(): void
+    {
+        $this->expectException(HarbourException::class);
+        $this->expectExceptionMessage('Unsupported Redis client');
+
+        InstallationSelection::fromOptions('none', 'redis', 'log', 'none', 'shared', 'hiredis');
+    }
+
     public function test_every_base_and_optional_service_combination_renders_unique_environment_keys(): void
     {
         $renderer = new InstallationFileRenderer;

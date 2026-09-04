@@ -24,6 +24,11 @@ abstract class TestCase extends Orchestra
         parent::setUp();
         $this->application()->instance(InstallationPreflight::class, new class implements InstallationPreflight
         {
+            public function requirements(InstallationSelection $selection): array
+            {
+                return [];
+            }
+
             public function assertReady(InstallationSelection $selection): void {}
         });
     }

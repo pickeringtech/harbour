@@ -24,4 +24,6 @@ Laravel events are also dispatched:
 - `WorkspaceTearingDown`
 - `WorkspaceTornDown`
 
-Harbour hooks are finite lifecycle actions. Long-running application servers, Vite, Reverb, Horizon, workers, and schedulers belong to an external process manager.
+Harbour hooks are finite lifecycle actions. `workspace:dev` provides a small
+attached Laravel/Vite session; Reverb, Horizon, workers, schedulers, and
+background deployments belong to project-specific process management.

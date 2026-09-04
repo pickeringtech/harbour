@@ -253,7 +253,9 @@ jobs:
         working-directory: /tmp/harbour-app
       - run: composer require --dev pickeringtech/harbour:@dev --no-interaction
         working-directory: /tmp/harbour-app
-      - run: php artisan list --format=json | grep -q workspace:setup
+      - run: |
+          php artisan list --format=json | grep -q workspace:setup
+          php artisan list --format=json | grep -q workspace:dev
         working-directory: /tmp/harbour-app
       - name: Auto-detect and install Harbour project configuration
         run: |
@@ -273,6 +275,23 @@ jobs:
           composer workspace:teardown -- --force
           test ! -e .harbour.json
           test "$(sha256sum .env | cut -d ' ' -f 1)" = "$(cat /tmp/harbour-original-env-checksum)"
+      - name: Install selected integrations in one Harbour pass
+        working-directory: /tmp/harbour-app
+        run: |
+          php artisan workspace:install \
+            --database=sqlite \
+            --cache=redis \
+            --mail=log \
+            --with=meilisearch \
+            --provider=shared \
+            --install-dependencies \
+            --reconfigure \
+            --json | tee /tmp/harbour-dependencies.json
+          grep -q '"redis_client":"predis"' /tmp/harbour-dependencies.json
+          grep -q '^REDIS_CLIENT=predis$' .env.harbour
+          composer show predis/predis --no-interaction
+          composer show laravel/scout --no-interaction
+          composer show meilisearch/meilisearch-php --no-interaction
 
   acceptance:
     name: Two-worktree acceptance

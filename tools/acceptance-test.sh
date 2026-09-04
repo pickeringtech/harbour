@@ -8,13 +8,13 @@ project_root="${acceptance_root}/project"
 workspace_a="${acceptance_root}/workspace-a"
 workspace_b="${acceptance_root}/workspace-b"
 workspace_failure="${acceptance_root}/workspace-failure"
-vite_a=""
-vite_b=""
+dev_a=""
+dev_b=""
 reverb_a=""
 reverb_b=""
 
 cleanup() {
-    for process in "${vite_a}" "${vite_b}" "${reverb_a}" "${reverb_b}"; do
+    for process in "${dev_a}" "${dev_b}" "${reverb_a}" "${reverb_b}"; do
         if [[ -n "${process}" ]]; then
             kill -- "-${process}" >/dev/null 2>&1 || true
         fi
@@ -125,20 +125,24 @@ wait "${setup_b}" || { cat "${acceptance_root}/setup-b.log"; exit 1; }
 (cd "${workspace_b}" && php artisan workspace:status --json) >"${acceptance_root}/status-b.json"
 vite_port_a="$(status_port "${acceptance_root}/status-a.json" VITE_PORT)"
 vite_port_b="$(status_port "${acceptance_root}/status-b.json" VITE_PORT)"
+app_port_a="$(status_port "${acceptance_root}/status-a.json" APP_PORT)"
+app_port_b="$(status_port "${acceptance_root}/status-b.json" APP_PORT)"
 reverb_port_a="$(status_port "${acceptance_root}/status-a.json" REVERB_PORT)"
 reverb_port_b="$(status_port "${acceptance_root}/status-b.json" REVERB_PORT)"
 
-setsid bash -c 'cd "$1" && exec env LARAVEL_BYPASS_ENV_CHECK=1 npm run dev -- --host 127.0.0.1 --port "$2" --strictPort' bash "${workspace_a}" "${vite_port_a}" >"${acceptance_root}/vite-a.log" 2>&1 &
-vite_a=$!
-setsid bash -c 'cd "$1" && exec env LARAVEL_BYPASS_ENV_CHECK=1 npm run dev -- --host 127.0.0.1 --port "$2" --strictPort' bash "${workspace_b}" "${vite_port_b}" >"${acceptance_root}/vite-b.log" 2>&1 &
-vite_b=$!
+setsid bash -c 'cd "$1" && exec composer workspace:dev' bash "${workspace_a}" >"${acceptance_root}/dev-a.log" 2>&1 &
+dev_a=$!
+setsid bash -c 'cd "$1" && exec composer workspace:dev' bash "${workspace_b}" >"${acceptance_root}/dev-b.log" 2>&1 &
+dev_b=$!
 setsid bash -c 'cd "$1" && exec php artisan reverb:start --host=127.0.0.1 --port="$2"' bash "${workspace_a}" "${reverb_port_a}" >"${acceptance_root}/reverb-a.log" 2>&1 &
 reverb_a=$!
 setsid bash -c 'cd "$1" && exec php artisan reverb:start --host=127.0.0.1 --port="$2"' bash "${workspace_b}" "${reverb_port_b}" >"${acceptance_root}/reverb-b.log" 2>&1 &
 reverb_b=$!
 
-wait_for_file "${workspace_a}/public/hot" || { cat "${acceptance_root}/vite-a.log"; exit 1; }
-wait_for_file "${workspace_b}/public/hot" || { cat "${acceptance_root}/vite-b.log"; exit 1; }
+wait_for_file "${workspace_a}/public/hot" || { cat "${acceptance_root}/dev-a.log"; exit 1; }
+wait_for_file "${workspace_b}/public/hot" || { cat "${acceptance_root}/dev-b.log"; exit 1; }
+wait_for_port "${app_port_a}" || { cat "${acceptance_root}/dev-a.log"; exit 1; }
+wait_for_port "${app_port_b}" || { cat "${acceptance_root}/dev-b.log"; exit 1; }
 wait_for_port "${reverb_port_a}" || { cat "${acceptance_root}/reverb-a.log"; exit 1; }
 wait_for_port "${reverb_port_b}" || { cat "${acceptance_root}/reverb-b.log"; exit 1; }
 grep -q ":${vite_port_a}" "${workspace_a}/public/hot"
@@ -146,6 +150,8 @@ grep -q ":${vite_port_b}" "${workspace_b}/public/hot"
 test "$(cat "${workspace_a}/public/hot")" != "$(cat "${workspace_b}/public/hot")"
 curl --fail --silent "http://127.0.0.1:${vite_port_a}/@vite/client" >/dev/null
 curl --fail --silent "http://127.0.0.1:${vite_port_b}/@vite/client" >/dev/null
+curl --fail --silent "http://127.0.0.1:${app_port_a}/up" >/dev/null
+curl --fail --silent "http://127.0.0.1:${app_port_b}/up" >/dev/null
 
 (php "${harbour_source}/tools/acceptance-probe.php" "${workspace_a}" workspace-a write >"${acceptance_root}/probe-a.json") &
 probe_a=$!
@@ -157,12 +163,12 @@ php "${harbour_source}/tools/verify-acceptance.php" \
     "${acceptance_root}/status-a.json" "${acceptance_root}/status-b.json" \
     "${acceptance_root}/probe-a.json" "${acceptance_root}/probe-b.json"
 
-for process in "${vite_a}" "${vite_b}" "${reverb_a}" "${reverb_b}"; do
+for process in "${dev_a}" "${dev_b}" "${reverb_a}" "${reverb_b}"; do
     kill -- "-${process}" >/dev/null 2>&1 || true
     wait "${process}" 2>/dev/null || true
 done
-vite_a=""
-vite_b=""
+dev_a=""
+dev_b=""
 reverb_a=""
 reverb_b=""
 
@@ -187,4 +193,4 @@ fi
 test ! -e "${workspace_failure}/.harbour.json"
 test ! -e "${workspace_failure}/.env"
 
-echo "Harbour release acceptance passed, including partial-failure cleanup."
+echo "Harbour release acceptance passed, including two attached application sessions and partial-failure cleanup."
