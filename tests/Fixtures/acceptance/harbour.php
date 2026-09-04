@@ -43,7 +43,12 @@ return [
         ],
     ] : [],
     'compose' => $docker ? [
-        'acceptance-stack' => ['file' => 'docker-compose.harbour.yml'],
+        'acceptance-stack' => [
+            'file' => 'docker-compose.harbour.yml',
+            'ports' => [
+                'ACCEPTANCE_COMPOSE_PORT' => ['range' => [22100, 22199]],
+            ],
+        ],
     ] : [],
     'hooks' => [
         'before_setup' => [],

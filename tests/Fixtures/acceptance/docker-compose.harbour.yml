@@ -1,4 +1,6 @@
 services:
   acceptance:
     image: alpine:3.22
-    command: ["sleep", "300"]
+    command: ["httpd", "-f", "-p", "8080"]
+    ports:
+      - "127.0.0.1:${ACCEPTANCE_COMPOSE_PORT}:8080"
