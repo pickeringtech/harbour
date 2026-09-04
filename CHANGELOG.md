@@ -6,6 +6,12 @@ All notable changes will be documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Repeated setup now preserves a workspace's owned port reservations while its
+  application or managed Compose services are listening, preventing launch from
+  splitting persisted state from the running services and rendered environment.
+
 ## [0.0.6] - 2026-09-04
 
 ### Fixed

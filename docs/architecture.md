@@ -58,7 +58,8 @@ vanished must be torn down before a new setup. Teardown can remove the recorded
 subset without deriving ownership from current configuration.
 
 Setup is convergent within those ownership rules. Existing valid allocations
-and resources are reused, and reused port reservations are bind-checked again.
+and resources are reused. Owned port reservations remain stable when the
+workspace's application or managed services are already listening.
 `--fresh` first tears down only resources proven to be Harbour-owned and then
 performs normal setup. Teardown is idempotent: missing resources are treated as
 already removed, while mismatched ownership evidence is an error.

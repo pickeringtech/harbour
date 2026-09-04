@@ -22,9 +22,11 @@ Allocation happens under a machine-wide `flock`. Harbour records the reservation
 
 Reservations persist across process crashes and are associated with a workspace ID and path. Reconciliation can reclaim an entry whose checkout no longer exists, but never destroys an external resource merely because an entry looks stale.
 
-Setup bind-checks a reused reservation. If another process took the port,
-Harbour allocates and persists a new candidate from the configured range. A
-project `harbour.variables` entry can still override an allocated port variable,
+Once a workspace owns a reservation, repeated setup keeps that port stable even
+while the workspace's application or managed service is listening on it. A
+genuine external collision is therefore reported by strict process or service
+startup instead of silently changing the workspace environment. A project
+`harbour.variables` entry can still override an allocated port variable,
 but setup emits a warning because the override defeats collision avoidance.
 
 Harbour is not a daemon and does not hold every socket open. An unrelated
