@@ -20,8 +20,9 @@ and differs across platforms.
 
 ## Decision
 
-- An `auto` Redis client resolves to portable Predis. Explicit PhpRedis remains
-  supported for projects that deliberately require the extension.
+- An `auto` Redis client resolves to portable Predis. Auto-detected PhpRedis is
+  retained when the host can load it and otherwise moves to Predis; an explicit
+  `--redis-client=phpredis` remains authoritative.
 - After stack selection, the interactive installer offers one grouped Composer
   operation for all missing Laravel integrations. Non-interactive callers opt
   in with `--install-dependencies`.

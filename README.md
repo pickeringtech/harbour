@@ -64,8 +64,9 @@ leaving the selected infrastructure ready.
 After that final selection, Harbour checks the exact runtime requirements for
 the chosen stack. It offers to install all missing project-level Composer
 integrations in one reviewed operation. Redis and Valkey use portable Predis by
-default, avoiding a host Redis extension entirely; an existing project may
-still select PhpRedis explicitly. Machine-level requirements such as
+default, avoiding a host Redis extension entirely. Auto-detection retains
+PhpRedis when the host can load it and otherwise selects Predis; a project may
+still require PhpRedis explicitly. Machine-level requirements such as
 `pdo_pgsql` are reported separately with platform-specific guidance and an
 exact retry command that preserves the completed selection. Compose mode also
 requires Docker with the Compose v2 plugin.

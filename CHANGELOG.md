@@ -17,8 +17,9 @@ All notable changes will be documented here. The format follows
 
 ### Changed
 
-- Redis and Valkey installations default to portable Predis, while explicit
-  PhpRedis projects remain supported.
+- Redis and Valkey installations default to portable Predis. Auto-detected
+  PhpRedis is retained when available, while explicit PhpRedis remains
+  supported.
 - Missing Laravel integration packages can be installed in one approved
   Composer operation and are rechecked without repeating component selection.
 - Remaining native PHP requirements now use structured multi-line output,

@@ -60,7 +60,8 @@ CLI plus Compose v2 plugin when Compose was chosen. Missing Composer packages
 are grouped into one reviewable installation prompt and installed together.
 Harbour then rechecks the selection automatically—there is no need to repeat
 the menus. Redis and Valkey default to Predis so they do not require a native
-PHP extension.
+PHP extension. Auto-detected PhpRedis is retained when the host can load it and
+otherwise replaced by Predis; `--redis-client=phpredis` opts in explicitly.
 
 Machine capabilities cannot safely be hidden. If the selected SQL driver is
 not loaded, Harbour reports that single remaining requirement with guidance

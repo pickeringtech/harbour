@@ -20,6 +20,8 @@ Once the final stack is known, the installer validates its PHP extensions,
 Laravel client packages, and—when selected—Docker Compose tooling. It can install
 the selected Composer integrations in one reviewed operation and then rechecks
 the stack automatically. Portable Predis is the default for Redis and Valkey.
+Auto-detected PhpRedis is retained when the host can load it; an explicit CLI
+choice remains authoritative.
 Missing machine capabilities are reported separately with platform guidance and
 an exact retry command under `HARBOUR_INSTALL_REQUIREMENTS_MISSING`.
 

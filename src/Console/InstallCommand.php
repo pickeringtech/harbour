@@ -61,7 +61,10 @@ final class InstallCommand extends WorkspaceCommand
                 throw new HarbourException(ErrorCode::InvalidInstallSelection, '--launch cannot be combined with --json because launching is an attached development session.');
             }
             $plan = $this->installation($json, $detector, $services);
-            $plan = $plan->withDiscovery($runtime->resolve($plan->discovery));
+            $plan = $plan->withDiscovery($runtime->resolve(
+                $plan->discovery,
+                $this->stringOption('redis-client') !== null,
+            ));
             $discovery = $plan->discovery;
             $selection = $discovery->selection;
             $dependenciesApproved = $this->installDependencies($selection, $preflight, $dependencies, $json, $plan->start);

@@ -6,13 +6,29 @@ namespace PickeringTech\Harbour\Installation;
 
 final readonly class InstallationRuntimeResolver
 {
-    public function resolve(InstallationDiscovery $discovery): InstallationDiscovery
+    /** @param null|list<string> $extensions */
+    public function __construct(private ?array $extensions = null) {}
+
+    public function resolve(InstallationDiscovery $discovery, bool $redisClientExplicit = false): InstallationDiscovery
     {
         $selection = $discovery->selection;
-        if (! in_array($selection->cache, ['redis', 'valkey'], true) || $selection->redisClient !== 'auto') {
+        if (! in_array($selection->cache, ['redis', 'valkey'], true)) {
+            return $discovery;
+        }
+        if ($selection->redisClient === 'phpredis' && ($redisClientExplicit || $this->hasExtension('redis'))) {
+            return $discovery;
+        }
+        if ($selection->redisClient === 'predis') {
             return $discovery;
         }
 
         return $discovery->withSelection($selection->withRedisClient('predis'));
+    }
+
+    private function hasExtension(string $extension): bool
+    {
+        return $this->extensions === null
+            ? extension_loaded($extension)
+            : in_array($extension, $this->extensions, true);
     }
 }
