@@ -6,6 +6,11 @@ All notable changes will be documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Release signing now normalizes CRLF-formatted GitHub secrets and restores a
+  missing final newline before invoking OpenSSH.
+
 ## [0.0.4] - 2026-09-04
 
 ### Added

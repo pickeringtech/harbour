@@ -124,7 +124,8 @@ final readonly class GitTagPublisher implements TagPublisher
         if ($path === false) {
             throw new ReleaseException('Temporary release signing key could not be secured.');
         }
-        if (! chmod($path, 0600) || file_put_contents($path, $this->privateKey, LOCK_EX) !== strlen($this->privateKey)) {
+        $privateKey = rtrim(str_replace(["\r\n", "\r"], "\n", $this->privateKey), "\n")."\n";
+        if (! chmod($path, 0600) || file_put_contents($path, $privateKey, LOCK_EX) !== strlen($privateKey)) {
             $this->destroySigningKey($path);
             throw new ReleaseException('Temporary release signing key could not be secured.');
         }
