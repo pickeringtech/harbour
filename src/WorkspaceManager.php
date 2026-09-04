@@ -429,10 +429,11 @@ final readonly class WorkspaceManager
             $connection = $configuration->driver;
         }
         $this->config->set('database.default', $connection);
-        $this->config->set('database.connections.'.$connection.'.host', $configuration->host);
-        $this->config->set('database.connections.'.$connection.'.port', $configuration->port);
-        $this->config->set('database.connections.'.$connection.'.username', $configuration->username);
-        $this->config->set('database.connections.'.$connection.'.password', $configuration->password);
+        foreach (['host', 'port', 'username', 'password'] as $key) {
+            if ($configuration->{$key} !== null) {
+                $this->config->set('database.connections.'.$connection.'.'.$key, $configuration->{$key});
+            }
+        }
         $this->config->set('database.connections.'.$connection.'.database', $database);
     }
 

@@ -168,6 +168,25 @@ final class WorkspaceManagerCoverageTest extends TestCase
         $manager->teardown(true);
     }
 
+    public function test_sqlite_setup_preserves_laravels_host_array(): void
+    {
+        $config = $this->application()->make(Repository::class);
+        $config->set('harbour.database.enabled', true);
+        $config->set('harbour.database.connection', 'sqlite');
+        $config->set('harbour.database.migrate', false);
+        $config->set('database.connections.sqlite.host', ['localhost']);
+
+        $sequence = new WorkspaceSetupSequence;
+        $this->application()->instance(DatabaseManager::class, new DatabaseManager([new OrderedDatabaseDriver($sequence)]));
+        $this->application()->forgetInstance(WorkspaceManager::class);
+
+        $manager = $this->application()->make(WorkspaceManager::class);
+        $manager->setup();
+
+        self::assertSame(['localhost'], $config->get('database.connections.sqlite.host'));
+        $manager->teardown(true);
+    }
+
     public function test_fresh_setup_recreates_only_owned_sqlite_and_detects_missing_ownership(): void
     {
         if (! extension_loaded('pdo_sqlite')) {
