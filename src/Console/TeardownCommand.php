@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace PickeringTech\Harbour\Console;
 
+use PickeringTech\Harbour\Exceptions\ErrorCode;
+use PickeringTech\Harbour\Exceptions\HarbourException;
 use PickeringTech\Harbour\WorkspaceManager;
 
 final class TeardownCommand extends WorkspaceCommand
@@ -19,6 +21,14 @@ final class TeardownCommand extends WorkspaceCommand
         return $this->executeSafely($json, function () use ($manager, $json): int {
             $force = (bool) $this->option('force');
             if (! $force && ! $this->confirm('Tear down resources proven to be owned by this Harbour workspace?')) {
+                if (! $this->input->isInteractive()) {
+                    throw new HarbourException(
+                        ErrorCode::UnsafeOperation,
+                        'Non-interactive teardown requires --force.',
+                    );
+                }
+                $this->components->warn('Teardown aborted; no resources were changed.');
+
                 return self::SUCCESS;
             }
             $manager->teardown($force);

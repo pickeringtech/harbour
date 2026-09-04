@@ -35,6 +35,12 @@ MariaDB, MongoDB, Redis, Valkey, Memcached, Meilisearch, Typesense, MinIO,
 RustFS, Mailpit, RabbitMQ, Selenium, and Soketi. Host ports bind to loopback and
 are reserved per workspace at setup time.
 
+Every generated image is pinned to a reviewable version and every service has
+a readiness healthcheck, so `docker compose up --wait` means ready rather than
+merely started. MongoDB uses the lightweight official `mongo` image and is
+connection-only at the database level: Harbour owns the optional container,
+not the MongoDB database inside it.
+
 Harbour does not overwrite an existing `docker-compose.harbour.yml`. If that
 file already exists, it remains project-owned and the installer reports it as
 unchanged.

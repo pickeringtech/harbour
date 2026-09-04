@@ -130,7 +130,11 @@ Compose file. `--provider=shared` records that the service processes already
 exist. `--start` runs `workspace:setup` after scaffolding. All choices are thus
 available without prompts for agents and CI.
 
-Without `--detect` or explicit selections, a non-interactive install stops with `INSTALL_SELECTION_REQUIRED` before writing anything.
+Without `--detect` or explicit selections, a non-interactive install stops with
+`HARBOUR_INSTALL_SELECTION_REQUIRED` before writing anything. When protected
+installation files already exist, Harbour lists the exact files to delete
+before deliberately choosing a different configuration; it never overwrites
+them.
 
 ## 3. Commit the policy
 

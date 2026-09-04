@@ -32,7 +32,9 @@ Branch names, paths, configuration, and template values are treated as untrusted
 
 ## Production protection
 
-Harbour is intended as a development dependency and is disabled when `APP_ENV=production` by default. An intentional CI environment can opt in with `HARBOUR_ENABLED=true`.
+Harbour is intended as a development dependency and is enabled by default only
+when `APP_ENV` is `local` or `testing`. Staging, prod, and custom environments
+fail closed unless they intentionally set `HARBOUR_ENABLED=true`.
 
 `--force` suppresses interaction only. It never bypasses resource ownership, environment checksum, database, Docker, Compose, or path guards.
 

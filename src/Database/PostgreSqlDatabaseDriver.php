@@ -58,9 +58,16 @@ final readonly class PostgreSqlDatabaseDriver implements DatabaseLifecycleDriver
     {
         $evidence = OwnedDatabaseEvidence::fromResource($resource);
         $this->assertIdentifier($evidence->database);
+        if ($evidence->fingerprint !== $configuration->fingerprint()) {
+            return false;
+        }
         $admin = $this->connect($configuration, $configuration->adminDatabase ?: 'postgres');
 
-        return $this->databaseExists($admin, $evidence->database);
+        if (! $this->databaseExists($admin, $evidence->database)) {
+            return false;
+        }
+
+        return $this->marker->matches($this->connect($configuration, $evidence->database), $evidence);
     }
 
     public function destroy(OwnedResource $resource, DatabaseConfiguration $configuration, string $workspacePath): void

@@ -59,7 +59,7 @@ final readonly class InstallationComposeRenderer
 YAML,
             'pgsql' => <<<'YAML'
   pgsql:
-    image: postgres:18-alpine
+    image: postgres:18.0-alpine
     ports:
       - "127.0.0.1:${DB_PORT}:5432"
     environment:
@@ -75,7 +75,7 @@ YAML,
 YAML,
             'mariadb' => <<<'YAML'
   mariadb:
-    image: mariadb:11
+    image: mariadb:11.8
     ports:
       - "127.0.0.1:${DB_PORT}:3306"
     environment:
@@ -89,7 +89,7 @@ YAML,
 YAML,
             'mongodb' => <<<'YAML'
   mongodb:
-    image: mongodb/mongodb-atlas-local:latest
+    image: mongo:8.0
     ports:
       - "127.0.0.1:${MONGODB_PORT}:27017"
     volumes:
@@ -101,7 +101,7 @@ YAML,
 YAML,
             'redis' => <<<'YAML'
   redis:
-    image: redis:alpine
+    image: redis:8.2-alpine
     ports:
       - "127.0.0.1:${REDIS_PORT}:6379"
     volumes:
@@ -113,7 +113,7 @@ YAML,
 YAML,
             'valkey' => <<<'YAML'
   valkey:
-    image: valkey/valkey:alpine
+    image: valkey/valkey:8.1-alpine
     ports:
       - "127.0.0.1:${REDIS_PORT}:6379"
     volumes:
@@ -125,13 +125,17 @@ YAML,
 YAML,
             'memcached' => <<<'YAML'
   memcached:
-    image: memcached:alpine
+    image: memcached:1.6-alpine
     ports:
       - "127.0.0.1:${MEMCACHED_PORT}:11211"
+    healthcheck:
+      test: ["CMD-SHELL", "echo version | nc -w 1 127.0.0.1 11211 | grep -q VERSION"]
+      retries: 10
+      timeout: 5s
 YAML,
             'meilisearch' => <<<'YAML'
   meilisearch:
-    image: getmeili/meilisearch:latest
+    image: getmeili/meilisearch:v1.15
     ports:
       - "127.0.0.1:${MEILISEARCH_PORT}:7700"
     environment:
@@ -161,7 +165,7 @@ YAML,
 YAML,
             'minio' => <<<'YAML'
   minio:
-    image: minio/minio:latest
+    image: minio/minio:RELEASE.2025-07-18T21-56-31Z
     command: server /data --console-address ":8900"
     ports:
       - "127.0.0.1:${MINIO_PORT}:9000"
@@ -172,13 +176,13 @@ YAML,
     volumes:
       - minio-data:/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "curl", "--fail", "http://127.0.0.1:9000/minio/health/live"]
       retries: 10
       timeout: 5s
 YAML,
             'rustfs' => <<<'YAML'
   rustfs:
-    image: rustfs/rustfs:latest
+    image: rustfs/rustfs:1.0.0-beta.11
     ports:
       - "127.0.0.1:${RUSTFS_PORT}:9000"
       - "127.0.0.1:${RUSTFS_CONSOLE_PORT}:9001"
@@ -191,17 +195,25 @@ YAML,
       RUSTFS_SECRET_KEY: rustfsadmin
     volumes:
       - rustfs-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://127.0.0.1:9000/health"]
+      retries: 10
+      timeout: 5s
 YAML,
             'mailpit' => <<<'YAML'
   mailpit:
-    image: axllent/mailpit:latest
+    image: axllent/mailpit:v1.27
     ports:
       - "127.0.0.1:${MAIL_PORT}:1025"
       - "127.0.0.1:${MAILPIT_DASHBOARD_PORT}:8025"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8025/readyz"]
+      retries: 10
+      timeout: 5s
 YAML,
             'rabbitmq' => <<<'YAML'
   rabbitmq:
-    image: rabbitmq:4-management-alpine
+    image: rabbitmq:4.1-management-alpine
     ports:
       - "127.0.0.1:${RABBITMQ_PORT}:5672"
       - "127.0.0.1:${RABBITMQ_DASHBOARD_PORT}:15672"
@@ -217,14 +229,18 @@ YAML,
 YAML,
             'selenium' => <<<'YAML'
   selenium:
-    image: selenium/standalone-chromium
+    image: selenium/standalone-chromium:4.35.0
     ports:
       - "127.0.0.1:${SELENIUM_PORT}:4444"
     shm_size: 2gb
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://127.0.0.1:4444/wd/hub/status | grep -q '\"ready\": true'"]
+      retries: 10
+      timeout: 5s
 YAML,
             'soketi' => <<<'YAML'
   soketi:
-    image: quay.io/soketi/soketi:latest-16-alpine
+    image: quay.io/soketi/soketi:1.6-16-alpine
     ports:
       - "127.0.0.1:${PUSHER_PORT}:6001"
       - "127.0.0.1:${PUSHER_METRICS_PORT}:9601"
@@ -233,6 +249,10 @@ YAML,
       SOKETI_DEFAULT_APP_KEY: app-key
       SOKETI_DEFAULT_APP_SECRET: app-secret
       SOKETI_METRICS_SERVER_PORT: "9601"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:6001/ready"]
+      retries: 10
+      timeout: 5s
 YAML,
             default => throw new LogicException("Unsupported Compose service [{$service}]."),
         };

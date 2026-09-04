@@ -35,7 +35,11 @@ eval "$(php artisan workspace:env --format=shell)"
 
 Secrets are omitted unless `--show-secrets` is explicitly requested in a supported environment output. Avoid logging that output.
 
-Laravel verbosity flags expose lifecycle stages and external commands without printing secret values. Machine failures use a versioned JSON envelope and stable error code such as `PORT_ALLOCATION_FAILED`, `UNRESOLVED_VARIABLE`, `ENVIRONMENT_MODIFIED`, or `DATABASE_NOT_OWNED`.
+Process failures include a redacted stderr tail, limited to 4 KiB, in both human
+and JSON output. Machine failures use a versioned JSON envelope and namespaced
+codes such as `HARBOUR_PORT_ALLOCATION_FAILED`,
+`HARBOUR_UNRESOLVED_VARIABLE`, `HARBOUR_ENVIRONMENT_MODIFIED`, or
+`HARBOUR_DATABASE_NOT_OWNED`. JSON consumers should branch on `error.code`.
 
 If setup fails halfway through, inspect status and run:
 

@@ -6,7 +6,7 @@ use PickeringTech\Harbour\Identity\DefaultWorkspaceIdentityStrategy;
 use PickeringTech\Harbour\Ports\DefaultPortAllocationStrategy;
 
 return [
-    'enabled' => env('HARBOUR_ENABLED', env('APP_ENV') !== 'production'),
+    'enabled' => env('HARBOUR_ENABLED', in_array(env('APP_ENV'), ['local', 'testing'], true)),
 
     'template' => '.env.harbour',
     'state' => '.harbour.json',
@@ -61,6 +61,8 @@ return [
     'compose' => [],
 
     'hooks' => [
+        // Prefer argv lists, for example [PHP_BINARY, 'artisan', 'about'].
+        // String hooks are supported and intentionally run through a shell.
         'before_setup' => [],
         'after_setup' => [],
         'before_teardown' => [],

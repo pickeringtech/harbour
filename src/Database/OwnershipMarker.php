@@ -6,7 +6,7 @@ namespace PickeringTech\Harbour\Database;
 
 use PDO;
 
-final class OwnershipMarker
+class OwnershipMarker
 {
     private const TABLE = '_harbour_ownership';
 

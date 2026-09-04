@@ -34,7 +34,7 @@ final class FailureRecoveryTest extends TestCase
             $manager->setup();
             self::fail('Setup should have failed.');
         } catch (HarbourException $exception) {
-            self::assertSame('PROCESS_FAILED', $exception->errorCode->value);
+            self::assertSame('HARBOUR_PROCESS_FAILED', $exception->errorCode->value);
         }
 
         $state = $manager->current();
@@ -106,6 +106,51 @@ final class FailureRecoveryTest extends TestCase
         self::assertSame("ORIGINAL=yes\n", file_get_contents($this->workspaceDirectory.'/.env'));
     }
 
+    public function test_retry_finishes_a_database_prepare_whose_create_never_succeeded(): void
+    {
+        $driver = new RetryOnceDatabaseDriver;
+        $this->enableInjectedDatabase($driver);
+        $manager = $this->application()->make(WorkspaceManager::class);
+
+        try {
+            $manager->setup();
+            self::fail('The first create should fail.');
+        } catch (HarbourException $exception) {
+            self::assertSame(ErrorCode::DatabaseCreationFailed, $exception->errorCode);
+        }
+
+        $failed = $manager->current()?->state();
+        self::assertSame('failed', $failed?->status);
+        self::assertTrue(($failed?->resources[0]->metadata['creation_pending'] ?? null) === true);
+
+        $ready = $manager->setup();
+        self::assertSame('ready', $ready->state()->status);
+        self::assertFalse(($ready->state()->resources[0]->metadata['creation_pending'] ?? true) === true);
+        self::assertSame(2, $driver->created);
+
+        $manager->teardown(true);
+    }
+
+    public function test_retry_refuses_to_recreate_a_confirmed_database_that_vanished(): void
+    {
+        $driver = new RetryOnceDatabaseDriver(0);
+        $this->enableInjectedDatabase($driver);
+        $manager = $this->application()->make(WorkspaceManager::class);
+        $manager->setup();
+        $driver->exists = false;
+
+        try {
+            $manager->setup();
+            self::fail('A confirmed vanished database must not be recreated.');
+        } catch (HarbourException $exception) {
+            self::assertSame(ErrorCode::DatabaseNotOwned, $exception->errorCode);
+            self::assertStringContainsString('workspace:teardown --force', $exception->getMessage());
+            self::assertSame(1, $driver->created);
+        } finally {
+            $manager->teardown(true);
+        }
+    }
+
     public function test_teardown_restores_environment_after_migration_failure(): void
     {
         $driver = new InjectedDatabaseDriver(false);
@@ -153,7 +198,32 @@ final class FailureRecoveryTest extends TestCase
         self::assertSame("ORIGINAL=yes\n", file_get_contents($this->workspaceDirectory.'/.env'));
     }
 
-    private function enableInjectedDatabase(InjectedDatabaseDriver $driver): void
+    public function test_retry_creates_a_docker_container_after_prepare_was_saved(): void
+    {
+        $config = $this->application()->make(Repository::class);
+        $config->set('harbour.services', ['search' => ['driver' => 'docker', 'image' => 'alpine:3.22']]);
+        $runner = new RetryDockerCreateRunner;
+        $this->application()->instance(CommandRunner::class, $runner);
+        $this->application()->forgetInstance(DockerManager::class);
+        $this->application()->forgetInstance(WorkspaceManager::class);
+        $manager = $this->application()->make(WorkspaceManager::class);
+
+        try {
+            $manager->setup();
+            self::fail('The first Docker create should fail.');
+        } catch (HarbourException $exception) {
+            self::assertSame(ErrorCode::ProcessFailed, $exception->errorCode);
+            self::assertSame('create failed', $exception->context['stderr']);
+        }
+
+        $workspace = $manager->setup();
+        self::assertSame('ready', $workspace->state()->status);
+        self::assertSame(2, $runner->createAttempts);
+        self::assertFalse(($workspace->state()->resources[0]->metadata['creation_pending'] ?? true) === true);
+        $manager->teardown(true);
+    }
+
+    private function enableInjectedDatabase(DatabaseLifecycleDriver $driver): void
     {
         $config = $this->application()->make(Repository::class);
         $config->set('harbour.database.enabled', true);
@@ -225,6 +295,38 @@ final class InjectedDatabaseDriver implements DatabaseLifecycleDriver
     }
 }
 
+final class RetryOnceDatabaseDriver implements DatabaseLifecycleDriver
+{
+    public int $created = 0;
+
+    public bool $exists = false;
+
+    public function __construct(private int $failures = 1) {}
+
+    public function supports(string $driver): bool
+    {
+        return $driver === 'sqlite';
+    }
+
+    public function create(OwnedResource $resource, string $workspacePath, DatabaseConfiguration $configuration): OwnedResource
+    {
+        $this->created++;
+        if ($this->failures-- > 0) {
+            throw new HarbourException(ErrorCode::DatabaseCreationFailed, 'Injected first database failure.');
+        }
+        $this->exists = true;
+
+        return $resource;
+    }
+
+    public function exists(OwnedResource $resource, DatabaseConfiguration $configuration): bool
+    {
+        return $this->exists;
+    }
+
+    public function destroy(OwnedResource $resource, DatabaseConfiguration $configuration, string $workspacePath): void {}
+}
+
 final class FailingDockerStartRunner implements CommandRunner
 {
     /** @var array<string, string> */
@@ -255,6 +357,50 @@ final class FailingDockerStartRunner implements CommandRunner
         }
         if (($command[1] ?? null) === 'rm') {
             $this->removed = true;
+        }
+
+        return new ProcessResult(0, 'ok');
+    }
+}
+
+final class RetryDockerCreateRunner implements CommandRunner
+{
+    public int $createAttempts = 0;
+
+    private bool $exists = false;
+
+    /** @var array<string, string> */
+    private array $labels = [];
+
+    public function run(array $command, string $workingDirectory, array $environment = []): ProcessResult
+    {
+        if (($command[1] ?? null) === 'create') {
+            $this->createAttempts++;
+            if ($this->createAttempts === 1) {
+                return new ProcessResult(1, '', 'create failed');
+            }
+            foreach ($command as $argument) {
+                foreach ([DockerManager::MANAGED_LABEL, DockerManager::WORKSPACE_LABEL, DockerManager::RESOURCE_LABEL] as $label) {
+                    if (str_starts_with($argument, $label.'=')) {
+                        $this->labels[$label] = substr($argument, strlen($label) + 1);
+                    }
+                }
+            }
+            $this->exists = true;
+
+            return new ProcessResult(0, 'retry-container');
+        }
+        if (($command[1] ?? null) === 'inspect') {
+            if (! $this->exists) {
+                return new ProcessResult(1, '', 'not found');
+            }
+
+            return in_array('--format', $command, true)
+                ? new ProcessResult(0, (string) json_encode($this->labels))
+                : new ProcessResult(0, 'retry-container');
+        }
+        if (($command[1] ?? null) === 'rm') {
+            $this->exists = false;
         }
 
         return new ProcessResult(0, 'ok');

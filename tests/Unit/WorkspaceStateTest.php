@@ -59,4 +59,16 @@ final class WorkspaceStateTest extends TestCase
         self::assertSame('[REDACTED]', $diagnostic['metadata']['ownership_token']);
         self::assertStringNotContainsString('must-not-leak', (string) json_encode((new Workspace($state, new VariableBag))->toArray()));
     }
+
+    public function test_state_copies_preserve_failures_until_ready_or_replace_them_explicitly(): void
+    {
+        $identity = new WorkspaceIdentity('ws_test', 'test-a1b2c3d4', str_repeat('a', 64), 'main');
+        $failed = WorkspaceState::begin($identity, $this->directory)->failed('HARBOUR_PROCESS_FAILED');
+
+        self::assertSame('HARBOUR_PROCESS_FAILED', $failed->withAllocation('APP_PORT', 8123)->errorCode);
+        self::assertSame('HARBOUR_PROCESS_FAILED', $failed->tearingDown()->errorCode);
+        self::assertSame('HARBOUR_PROCESS_FAILED', $failed->preparing()->errorCode);
+        self::assertNull($failed->ready()->errorCode);
+        self::assertSame('HARBOUR_DATABASE_NOT_OWNED', $failed->failed('HARBOUR_DATABASE_NOT_OWNED')->errorCode);
+    }
 }

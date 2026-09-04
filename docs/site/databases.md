@@ -1,6 +1,9 @@
 # Databases
 
-Harbour supports PostgreSQL, MySQL, MariaDB, and SQLite lifecycle management. MongoDB may be selected for environment generation, but its external Laravel driver owns database lifecycle.
+Harbour supports PostgreSQL, MySQL, MariaDB, and SQLite lifecycle management.
+MongoDB is a connection-only selection: Harbour can configure an isolated
+`MONGODB_DATABASE` name and optionally own the local Compose container, but it
+never creates, marks, migrates, or destroys the MongoDB database itself.
 
 ```php
 'database' => [

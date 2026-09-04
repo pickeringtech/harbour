@@ -9,7 +9,9 @@ APP_URL=${APP_URL}
 DB_DATABASE=${DB_DATABASE}
 ```
 
-Only `${VARIABLE}` is supported. Shell defaults and assignments are not interpreted. Every unresolved placeholder raises `UNRESOLVED_VARIABLE`; it never silently becomes an empty string.
+Only `${VARIABLE}` is supported. Shell defaults and assignments are not
+interpreted. Every unresolved placeholder raises
+`HARBOUR_UNRESOLVED_VARIABLE`; it never silently becomes an empty string.
 
 ## Resolution order
 

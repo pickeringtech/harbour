@@ -11,10 +11,12 @@ is necessary.
 ## Boundaries
 
 The public entry points are thin Artisan commands and the injectable
-`WorkspaceManager`. The manager coordinates focused domain services:
+`WorkspaceManager`. The manager is a lifecycle facade: setup and teardown are
+implemented by explicit sequences over focused variable, database, managed
+infrastructure, state, and environment services:
 
 <!-- Diagram source: docs/architecture.template.md#components -->
-![Harbour's Artisan and programmatic APIs coordinate focused identity, state, variable, database, environment, Docker, and Compose services through WorkspaceManager.](images/architecture/components.svg)
+![Harbour's Artisan and programmatic APIs enter through WorkspaceManager, which delegates lifecycle orchestration to setup and teardown sequences backed by focused domain services.](images/architecture/components.svg)
 
 The domain layer does not depend on Laravel Console. Infrastructure adapters
 may use Laravel's container, configuration repository, database manager,
@@ -41,10 +43,14 @@ The persisted state machine is deliberately small:
 Every mutation is serialized by a workspace lifecycle lock. Setup writes
 `preparing` before its first external mutation and persists each allocation or
 owned resource immediately after it is acquired. A stage failure writes
-`failed`, retaining all recorded ownership evidence. A later setup reconciles
-the partial state; teardown can always remove the recorded subset.
+`failed`, retaining all recorded ownership evidence. A later setup may finish
+an explicitly pending database or Docker creation. It reuses only resources
+whose external ownership evidence still matches; a confirmed resource that
+vanished must be torn down before a new setup. Teardown can remove the recorded
+subset without deriving ownership from current configuration.
 
-Setup is convergent. Existing valid allocations and resources are reused.
+Setup is convergent within those ownership rules. Existing valid allocations
+and resources are reused, and reused port reservations are bind-checked again.
 `--fresh` first tears down only resources proven to be Harbour-owned and then
 performs normal setup. Teardown is idempotent: missing resources are treated as
 already removed, while mismatched ownership evidence is an error.
@@ -54,11 +60,13 @@ already removed, while mismatched ownership evidence is an error.
 1. Refuse an unsafe runtime and acquire the workspace lifecycle lock.
 2. Load and validate state, reusing its identity after a checkout move/rename.
 3. Resolve Git/path identity and safe context-specific identifiers.
-4. Reserve configured ports through the global registry and persist each one.
+4. Write `preparing`, reserve configured ports through the global registry,
+   warn about configured port-variable overrides, and persist each allocation.
 5. Resolve non-resource variables and prepare the original `.env` snapshot.
 6. Start configured Docker and Compose resources, persisting ownership before
    each external start and waiting for Compose readiness.
-7. Create the logical database and persist its ownership record immediately.
+7. Persist a pending logical-database record, create its ownership marker, and
+   persist creation completion immediately.
 8. Resolve the complete variable set and atomically render `.env`.
 9. Run normal migrations, optional seeding, hooks, and Laravel events.
 10. Validate the result and write `ready`.
@@ -140,7 +148,7 @@ participate at those two precedence layers, limiting accidental disclosure of
 application credentials through diagnostic commands.
 
 The v1 renderer recognizes only `${VARIABLE}`. Missing variables raise
-`UNRESOLVED_VARIABLE`; no placeholder becomes an empty string. Substitution is
+`HARBOUR_UNRESOLVED_VARIABLE`; no placeholder becomes an empty string. Substitution is
 literal and does not interpret shell syntax.
 
 ## Laravel isolation

@@ -6,6 +6,17 @@ All notable changes will be documented here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- Server databases now count as existing only when their persisted
+  `_harbour_ownership` marker matches, and confirmed databases/containers that
+  later disappear are never silently recreated.
+- Harbour now enables destructive lifecycle commands by default only in
+  `local` and `testing`; every other environment must explicitly set
+  `HARBOUR_ENABLED=true`.
+- All machine error codes now use the `HARBOUR_` prefix. Consumers of
+  `error.code` must update for this intentional pre-1.0 contract change.
+
 ### Added
 
 - The installer can generate a workspace-managed `docker-compose.harbour.yml`
@@ -15,6 +26,10 @@ All notable changes will be documented here. The format follows
   `--start` options for agents and CI.
 - Generated Compose services have real validation, lifecycle, readiness,
   database connectivity, idempotency, and teardown coverage.
+- Process failures expose a bounded, redacted stderr tail in human and JSON
+  output, and setup reports when managed Compose images may be pulled.
+- Successful setup prints the native `php artisan serve` command, while JSON
+  installer starts include the resulting workspace payload.
 
 ### Changed
 
@@ -24,6 +39,20 @@ All notable changes will be documented here. The format follows
   numeric choices.
 - Managed Docker/Compose infrastructure starts and becomes ready before Harbour
   creates its logical database or runs migrations.
+- Failed SQL/Docker creation retries only from an explicitly persisted pending
+  record; confirmed missing resources require teardown before setup can retry.
+- Generated Compose images are pinned and every service has a readiness
+  healthcheck. MongoDB uses the official lightweight image and remains a
+  connection-only database selection.
+- Reused ports are bind-checked again, failed state remains attached across
+  intermediate state copies, and setup retries re-enter `preparing`.
+- Non-interactive fresh setup and teardown fail unless `--force` is passed.
+- Installation preserves existing Composer JSON formatting where possible and
+  gives exact removal instructions for protected files that prevent
+  reconfiguration.
+- Setup and teardown orchestration now lives in explicit lifecycle sequences,
+  with variable, database, hook, and managed-infrastructure responsibilities
+  separated from the `WorkspaceManager` facade.
 
 ## [0.0.2] - 2026-09-03
 

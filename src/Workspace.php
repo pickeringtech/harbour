@@ -48,6 +48,20 @@ final readonly class Workspace
         return $this->state;
     }
 
+    /** @return list<string> */
+    public function warnings(): array
+    {
+        $warnings = [];
+        foreach ($this->ports() as $name => $port) {
+            $variable = $this->variables->get($name);
+            if ($variable !== null && $variable->value !== (string) $port) {
+                $warnings[] = "Configured variable [{$name}]={$variable->value} overrides Harbour's allocated port {$port}.";
+            }
+        }
+
+        return $warnings;
+    }
+
     /** @return array<string, mixed> */
     public function toArray(): array
     {
@@ -63,6 +77,7 @@ final readonly class Workspace
             'application_url' => $this->variables->get('APP_URL')?->value,
             'database' => $database?->metadata['database'] ?? null,
             'resources' => array_map(static fn (OwnedResource $resource): array => $resource->diagnosticArray(), $this->state->resources),
+            'warnings' => $this->warnings(),
         ];
     }
 }

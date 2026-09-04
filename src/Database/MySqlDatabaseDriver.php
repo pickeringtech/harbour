@@ -44,7 +44,11 @@ final readonly class MySqlDatabaseDriver implements DatabaseLifecycleDriver
             $admin->exec('CREATE DATABASE '.$this->quoteIdentifier($database).' CHARACTER SET '.$configuration->charset);
             $target = $this->connect($configuration, $database);
             $this->marker->create($target, $evidence->workspaceId, $evidence->resourceId, $evidence->token);
+            unset($target);
         } catch (Throwable $exception) {
+            // MariaDB/MySQL may refuse or delay cleanup while the connection used
+            // to write the marker is still alive.
+            unset($target);
             if ($this->databaseExists($admin, $database)) {
                 $admin->exec('DROP DATABASE '.$this->quoteIdentifier($database));
             }
@@ -60,7 +64,16 @@ final readonly class MySqlDatabaseDriver implements DatabaseLifecycleDriver
         $evidence = OwnedDatabaseEvidence::fromResource($resource);
         $this->assertIdentifier($evidence->database);
 
-        return $this->databaseExists($this->connect($configuration), $evidence->database);
+        if ($evidence->fingerprint !== $configuration->fingerprint()) {
+            return false;
+        }
+
+        $admin = $this->connect($configuration);
+        if (! $this->databaseExists($admin, $evidence->database)) {
+            return false;
+        }
+
+        return $this->marker->matches($this->connect($configuration, $evidence->database), $evidence);
     }
 
     public function destroy(OwnedResource $resource, DatabaseConfiguration $configuration, string $workspacePath): void
