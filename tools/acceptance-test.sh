@@ -60,6 +60,7 @@ status_port() {
 
 export HARBOUR_STATE_HOME="${acceptance_root}/registry"
 export HARBOUR_ACCEPTANCE_DOCKER="${HARBOUR_ACCEPTANCE_DOCKER:-0}"
+export LARAVEL_BYPASS_ENV_CHECK=1
 
 npm_security_options=()
 npm_version_major="$(npm --version | cut -d. -f1)"
