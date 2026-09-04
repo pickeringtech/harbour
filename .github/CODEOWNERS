@@ -1,0 +1,13 @@
+# Owners of the CI and release supply chain.
+/.github/workflows/ @rpickz @rich-picktech
+/.github/dependabot.yml @rpickz @rich-picktech
+/.github/release.yml @rpickz @rich-picktech
+/composer.json @rpickz @rich-picktech
+/composer.lock @rpickz @rich-picktech
+/package.json @rpickz @rich-picktech
+/package-lock.json @rpickz @rich-picktech
+/docs/releasing.md @rpickz @rich-picktech
+
+# Harbour creates and removes local resources; all source changes are
+# safety-sensitive and need explicit maintainer ownership.
+/src/ @rpickz @rich-picktech
