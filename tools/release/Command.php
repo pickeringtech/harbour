@@ -66,7 +66,15 @@ final class Command
         $manifest = Manifest::fromFile($root.'/releases.json');
         $github = new HttpGitHubClient($repository, $token);
         $validated = (new Validator($git, $github, $mainRef))->validate($manifest, $manifest);
-        $results = (new Reconciler($github, new HttpPackagistClient))->reconcile($validated);
+        $tagPublisher = new GitTagPublisher(
+            $root,
+            $repository,
+            $token,
+            self::environment('RELEASE_SIGNING_PRIVATE_KEY'),
+            self::environment('RELEASE_SIGNER_NAME'),
+            self::environment('RELEASE_SIGNER_EMAIL'),
+        );
+        $results = (new Reconciler($github, new HttpPackagistClient, tagPublisher: $tagPublisher))->reconcile($validated);
         $summary = self::summary($results);
 
         fwrite(STDOUT, $summary);

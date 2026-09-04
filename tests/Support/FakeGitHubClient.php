@@ -9,8 +9,9 @@ use PickeringTech\Harbour\Release\GitHubConflict;
 use PickeringTech\Harbour\Release\GitHubRelease;
 use PickeringTech\Harbour\Release\ReleaseEntry;
 use PickeringTech\Harbour\Release\ReleaseTag;
+use PickeringTech\Harbour\Release\TagPublisher;
 
-final class FakeGitHubClient implements GitHubClient
+final class FakeGitHubClient implements GitHubClient, TagPublisher
 {
     /** @var array<string, ReleaseTag> */
     public array $tags = [];
@@ -27,6 +28,8 @@ final class FakeGitHubClient implements GitHubClient
     public bool $immutableEnabled = true;
 
     public bool $createdTagVerified = true;
+
+    public bool $publishedTagVerified = true;
 
     public bool $publishedReleaseImmutable = true;
 
@@ -85,7 +88,9 @@ final class FakeGitHubClient implements GitHubClient
 
             return false;
         }
-        $this->tags[$tag->version] = $tag;
+        $this->tags[$tag->version] = $this->publishedTagVerified
+            ? $tag
+            : new ReleaseTag($tag->version, $tag->commit, $tag->objectSha, true, false, 'unsigned');
 
         return true;
     }

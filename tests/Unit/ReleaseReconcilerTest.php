@@ -154,6 +154,24 @@ final class ReleaseReconcilerTest extends TestCase
         self::assertSame(['check-immutability', 'create-tag-object:v1.0.0'], $github->operations);
     }
 
+    public function test_tag_is_refetched_and_must_be_github_verified_after_push(): void
+    {
+        $entry = $this->entry('v1.0.0', 'a');
+        $github = new FakeGitHubClient;
+        $github->publishedTagVerified = false;
+
+        $results = $this->reconcile($github, [$entry]);
+
+        self::assertFalse($results[0]->successful);
+        self::assertStringContainsString('Created tag failed verification', $results[0]->detail);
+        self::assertSame([
+            'check-immutability',
+            'create-tag-object:v1.0.0',
+            'create-tag-ref:v1.0.0',
+        ], $github->operations);
+        self::assertArrayNotHasKey($entry->version, $github->releases);
+    }
+
     public function test_concurrent_exact_ref_creation_is_re_read_and_accepted(): void
     {
         $entry = $this->entry('v1.0.0', 'a');

@@ -71,5 +71,8 @@ jobs:
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
           RELEASE_MAIN_REF: ${{ github.sha }}
+          RELEASE_SIGNER_EMAIL: 31162594+rpickz@users.noreply.github.com
+          RELEASE_SIGNER_NAME: rpickz
+          RELEASE_SIGNING_PRIVATE_KEY: ${{ secrets.RELEASE_SIGNING_PRIVATE_KEY }}
           RELEASE_TOKEN: ${{ steps.release-token.outputs.token }}
         run: php tools/release.php reconcile

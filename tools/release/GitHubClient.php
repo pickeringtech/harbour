@@ -15,11 +15,6 @@ interface GitHubClient
 
     public function immutableReleasesEnabled(): bool;
 
-    public function createTagObject(ReleaseEntry $entry): ReleaseTag;
-
-    /** Returns false when the ref appeared concurrently. */
-    public function createTagReference(ReleaseTag $tag): bool;
-
     public function createDraftRelease(ReleaseEntry $entry, string $notes): GitHubRelease;
 
     public function publishRelease(GitHubRelease $release): GitHubRelease;

@@ -50,9 +50,10 @@ never `pull_request_target`, and receives no release credential.
 
 `tools/release.php` owns validation and reconciliation. Values are schema-
 validated before reaching Git, Markdown extraction, URLs, or API paths. Git is
-invoked with argument arrays; GitHub writes use fixed REST operations. There is
-no tag-ref update/delete or release-delete operation in the client interface;
-the only release update publishes a newly created or recovered draft.
+invoked with argument arrays. A new signed tag is pushed with one explicit,
+non-force refspec; release writes use fixed REST operations. There is no tag-ref
+update/delete or release-delete operation in the client interfaces; the only
+release update publishes a newly created or recovered draft.
 
 ## Reconciliation states
 
@@ -88,26 +89,46 @@ repository permissions `Contents: write`, `Checks: read`, and
 short-lived installation token to those permissions. `Administration: read`
 is used only to confirm immutable releases before a write.
 
+GitHub's Git-tag REST endpoint does not server-sign an annotated tag created by
+an App installation token. Harbour therefore separates authorization from
+signature identity:
+
+- the dedicated App is the only normal actor allowed to push the new tag ref;
+- `rpickz`, explicitly designated as the account-bound signing identity, owns a
+  dedicated signing-only SSH public key; that key cannot authenticate or push;
+- the matching private key is used only to sign the tag locally in the release
+  job. It is not an authentication key and is never the owner's everyday key.
+
+The fixed tagger identity is `rpickz
+<31162594+rpickz@users.noreply.github.com>`. The reconciler writes the
+private key to a mode-`0600` temporary file only while `git tag --sign` runs,
+overwrites and removes that file, then pushes exactly the new tag with the App
+token. It refetches the resulting object and requires GitHub to report an exact
+annotated tag with `verification.verified=true` before creating a release.
+
 Create a `release` environment without a manual approval rule and restrict its
 deployment branches to `main`. Store:
 
 - environment variable `RELEASE_APP_CLIENT_ID`;
-- environment secret `RELEASE_APP_PRIVATE_KEY`.
+- environment secret `RELEASE_APP_PRIVATE_KEY`;
+- environment secret `RELEASE_SIGNING_PRIVATE_KEY`, containing the dedicated
+  signing-only OpenSSH private key registered to `rpickz`.
 
 Only `.github/workflows/release-reconciliation.yml` references them. The App
-private key authenticates token minting; it is not a Git signing key. Tag
-objects are created through the GitHub API while authenticated as the App,
-without custom tagger or signature fields, then must come back with
-`verification.verified=true` before the tag ref is created. This follows
-GitHub's [bot signature verification requirements](https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification#signature-verification-for-bots)
-and avoids storing an owner's everyday key or silently signing as `rpickz`.
+private key authenticates token minting and the separate SSH key signs Git tag
+objects as the explicitly designated `rpickz` identity. The signing key is not
+the owner's everyday key and grants no authentication capability. GitHub
+verifies SSH-signed tags against the registered public signing key, as described
+in its [SSH signature verification documentation](https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification).
 
 Rotate the App private key by generating a replacement, updating the
 environment secret, manually dispatching a no-op reconciliation, and only then
 revoking the old key. For compromise, revoke all App keys and uninstall the
 App before investigating; immutable releases and update/deletion protection
 remain in force. Installation tokens are short-lived and the token action
-revokes them after each job.
+revokes them after each job. Rotate the signing key separately: add its public
+half to `rpickz`, replace `RELEASE_SIGNING_PRIVATE_KEY`, run a disposable
+verified-tag proof, and only then remove the old public key.
 
 ## Tag rulesets and one-time proof
 
@@ -146,9 +167,9 @@ records no token values. Use the owner identity to remove the App-created probe
 after the denial assertions have been recorded.
 
 Then enable the creation ruleset here and run a declaration through review.
-The reconciler's create-ref call is the production confirmation that the App
-receives the intended bypass. A denied create leaves only an unreachable Git
-tag object and no release, and a rerun converges after the ruleset is fixed.
+The reconciler's non-force tag push is the production confirmation that the App
+receives the intended bypass. A denied create leaves no remote tag or release,
+and a rerun converges after the ruleset is fixed.
 
 ## Outages and emergency recovery
 

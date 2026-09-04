@@ -105,37 +105,6 @@ final readonly class HttpGitHubClient implements GitHubClient
         return $response->status === 200 && ($response->data['enabled'] ?? false) === true;
     }
 
-    public function createTagObject(ReleaseEntry $entry): ReleaseTag
-    {
-        $response = $this->request('POST', '/repos/'.$this->repository.'/git/tags', [
-            'tag' => $entry->version,
-            'message' => 'Harbour '.$entry->version,
-            'object' => $entry->commit,
-            'type' => 'commit',
-        ], [201]);
-        $object = $this->array($response->data, 'object');
-        $verification = $this->array($response->data, 'verification');
-
-        return new ReleaseTag(
-            $this->string($response->data, 'tag'),
-            $this->string($object, 'sha'),
-            $this->string($response->data, 'sha'),
-            true,
-            ($verification['verified'] ?? false) === true,
-            is_string($verification['reason'] ?? null) ? $verification['reason'] : 'unknown',
-        );
-    }
-
-    public function createTagReference(ReleaseTag $tag): bool
-    {
-        $response = $this->request('POST', '/repos/'.$this->repository.'/git/refs', [
-            'ref' => 'refs/tags/'.$tag->version,
-            'sha' => $tag->objectSha,
-        ], [201, 422]);
-
-        return $response->status === 201;
-    }
-
     public function createDraftRelease(ReleaseEntry $entry, string $notes): GitHubRelease
     {
         $response = $this->request('POST', '/repos/'.$this->repository.'/releases', [

@@ -11,11 +11,14 @@ final readonly class Reconciler
 {
     private Closure $pause;
 
+    private TagPublisher $tagPublisher;
+
     public function __construct(
         private GitHubClient $github,
         private PackagistClient $packagist,
         private int $packagistAttempts = 12,
         ?Closure $pause = null,
+        ?TagPublisher $tagPublisher = null,
     ) {
         if ($packagistAttempts < 1) {
             throw new ReleaseException('Packagist attempts must be positive.');
@@ -23,6 +26,9 @@ final readonly class Reconciler
         $this->pause = $pause ?? static function (): void {
             sleep(10);
         };
+        $this->tagPublisher = $tagPublisher ?? ($github instanceof TagPublisher
+            ? $github
+            : throw new ReleaseException('A release tag publisher is required.'));
     }
 
     /** @return list<ReconciliationResult> */
@@ -183,20 +189,19 @@ final readonly class Reconciler
         }
 
         if ($tag === null) {
-            $tag = $this->github->createTagObject($entry);
+            $tag = $this->tagPublisher->createTagObject($entry);
             $this->assertCreatedTag($entry, $tag);
-            $created = $this->github->createTagReference($tag);
+            $created = $this->tagPublisher->createTagReference($tag);
 
-            if (! $created) {
-                $tag = $this->github->tag($entry->version);
-                if ($tag === null) {
-                    throw new ReleaseException("Tag {$entry->version} conflicted during creation but cannot be re-read.");
-                }
-                $concurrentError = $this->stateError(new ReconciliationState($entry, $tag, null));
-                if ($concurrentError !== null) {
-                    throw new ReleaseException('Concurrent tag creation was not exact: '.$concurrentError);
-                }
-            } else {
+            $tag = $this->github->tag($entry->version);
+            if ($tag === null) {
+                throw new ReleaseException("Tag {$entry->version} ".($created ? 'was pushed' : 'conflicted during creation').' but cannot be re-read.');
+            }
+            $createdError = $this->stateError(new ReconciliationState($entry, $tag, null));
+            if ($createdError !== null) {
+                throw new ReleaseException(($created ? 'Created tag failed verification: ' : 'Concurrent tag creation was not exact: ').$createdError);
+            }
+            if ($created) {
                 $tagCreated = true;
             }
         }

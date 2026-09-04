@@ -17,10 +17,19 @@ wrong-target existing tag fails closed for owner investigation. This preserves
 evidence and makes retries converge after partial failure without rewriting
 history.
 
-A dedicated GitHub App supplies a short-lived, repository-scoped token. GitHub
-creates and verifies the bot tag object before the reconciler creates its ref;
-no human signing key is stored in Actions. Immutable releases are checked before
-writes and releases are drafted before publication. Tag creation protection is
-separate from update/deletion protection because GitHub grants bypass per
-ruleset: the App may bypass only the creation ruleset, while only the owner has
-emergency bypass over historical mutation rules through a direct user bypass.
+A dedicated GitHub App supplies a short-lived, repository-scoped token and is
+the only normal identity allowed to push a new release-tag ref. GitHub does not
+server-sign annotated tags created through the Git-tag REST endpoint for an App
+installation token, so authentication and signing credentials are deliberately
+separate. `rpickz` is explicitly designated as the account-bound signature
+identity and owns a dedicated signing-only SSH public key; its private half
+cannot authenticate or push. The App then pushes one explicit non-force
+refspec, and the reconciler refetches the object and requires GitHub
+verification before it creates a release. No everyday owner signing key is
+stored in Actions.
+
+Immutable releases are checked before writes and releases are drafted before
+publication. Tag creation protection is separate from update/deletion
+protection because GitHub grants bypass per ruleset: the App may bypass only the
+creation ruleset, while only the owner has emergency bypass over historical
+mutation rules through a direct user bypass.
