@@ -12,6 +12,15 @@ final readonly class ProjectConfigurationDetector
     /** @var list<string> */
     private const COMPOSE_FILES = ['compose.yaml', 'compose.yml', 'docker-compose.yaml', 'docker-compose.yml'];
 
+    /**
+     * Laravel's normal connection selectors describe how the application behaves;
+     * their mere presence is not evidence that every service fragment containing
+     * the same key is in use.
+     *
+     * @var list<string>
+     */
+    private const NON_SERVICE_SIGNAL_KEYS = ['BROADCAST_CONNECTION', 'QUEUE_CONNECTION'];
+
     public function __construct(
         private string $workspacePath,
         private EnvironmentFile $environment = new EnvironmentFile,
@@ -284,6 +293,9 @@ final readonly class ProjectConfigurationDetector
                 continue;
             }
             foreach ($service->environmentKeys as $key) {
+                if (in_array($key, self::NON_SERVICE_SIGNAL_KEYS, true)) {
+                    continue;
+                }
                 if (isset($environment[$key]) && $environment[$key] !== '') {
                     $services[] = $service->name;
                     break;
