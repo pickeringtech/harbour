@@ -16,11 +16,41 @@
 ],
 ```
 
-Every selected Sail-compatible service also receives a `driver => shared`
-entry under `services`. This is descriptive project policy: setup uses the
-existing daemon and isolates mutable state where Laravel or the service allows
-it. Change or extend the generated configuration deliberately when a service
-needs Harbour's Docker or Compose provider.
+With the `shared` provider, every selected Sail-compatible service receives a
+`driver => shared` entry under `services`. This is descriptive project policy:
+setup uses the existing daemon and isolates mutable state where Laravel or the
+service allows it.
+
+When Compose is selected, installation records `provider => compose`, leaves
+the shared service map empty, and generates a Compose project with allocation
+ranges for each published host port:
+
+```php
+'installation' => [
+    'database' => 'pgsql',
+    'cache' => 'redis',
+    'mail' => 'mailpit',
+    'services' => ['pgsql', 'redis', 'mailpit'],
+    'provider' => 'compose',
+],
+
+'services' => [],
+
+'compose' => [
+    'services' => [
+        'file' => 'docker-compose.harbour.yml',
+        'ports' => [
+            'DB_PORT' => ['range' => [11000, 29999]],
+            'REDIS_PORT' => ['range' => [11000, 29999]],
+            'MAIL_PORT' => ['range' => [11000, 29999]],
+            'MAILPIT_DASHBOARD_PORT' => ['range' => [11000, 29999]],
+        ],
+    ],
+],
+```
+
+These are allocation ranges, not fixed ports. The locked registry assigns a
+different available value to each workspace and supplies it to Compose.
 
 ## Environment template
 

@@ -74,7 +74,16 @@ php artisan workspace:install
 The first command adds Harbour as a development-only dependency. It starts
 nothing and changes no infrastructure.
 
-The second command inspects the project and shows one reviewable proposal:
+The second command opens a keyboard-driven installer. Its first choice is
+deliberately simple:
+
+- **Auto-detect from this project** reads the existing project and shows one
+  reviewable proposal; or
+- **Choose components manually** opens focused selectors for the database,
+  cache, and mail transport, followed by a multi-select list for any additional
+  components.
+
+Auto-detection understands:
 
 - existing Sail/Compose services from `compose.yaml`, `compose.yml`, or the
   `docker-compose.*` equivalents;
@@ -82,11 +91,14 @@ The second command inspects the project and shows one reviewable proposal:
 - Laravel choices and host ports from `.env` and `.env.example`; or
 - SQLite, file-backed state, and log mail when no infrastructure is configured.
 
-Accept once, or decline to choose the database, cache, mail transport, and
-optional services individually. Harbour then creates `.env.harbour` and
-`config/harbour.php`, safely appends its state paths to `.gitignore`, and adds
-Composer workspace aliases when those names are free. Existing project files
-and scripts are never replaced.
+The manual path can either connect Laravel to shared infrastructure or generate
+a workspace-managed `docker-compose.harbour.yml`. It then asks whether Harbour
+should set up the first workspace and start those managed components now.
+
+Harbour creates `.env.harbour` and `config/harbour.php`, safely appends its state
+paths to `.gitignore`, and adds Composer workspace aliases when those names are
+free. Compose mode also creates `docker-compose.harbour.yml`. Existing project
+files and scripts are never replaced.
 
 Harbour reads Sail and Herd configuration; it does not silently start, rewrite,
 or take ownership of either tool. It configures native Laravel processes to use
@@ -106,10 +118,15 @@ php artisan workspace:install \
     --cache=redis \
     --mail=mailpit \
     --with=meilisearch,minio \
+    --compose \
+    --start \
     --no-interaction
 ```
 
-The main groups also accept `-d`, `-c`, and `-m`. See the
+`--compose` generates isolated service containers while PHP and Node remain
+native. `--start` immediately performs `workspace:setup`; omit either flag to
+use shared infrastructure or defer setup. The main groups also accept `-d`,
+`-c`, and `-m`. See the
 [installation guide](https://pickeringtech.github.io/harbour/getting-started/)
 for the supported Sail-compatible services and exact detection rules.
 

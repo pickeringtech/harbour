@@ -8,6 +8,7 @@ use Illuminate\Contracts\Config\Repository;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Testing\PendingCommand;
 use PickeringTech\Harbour\Console\InstallCommand;
+use PickeringTech\Harbour\Contracts\InstalledWorkspaceStarter;
 use PickeringTech\Harbour\Contracts\WorkspaceIdentityStrategy;
 use PickeringTech\Harbour\Identity\WorkspaceContext;
 use PickeringTech\Harbour\Identity\WorkspaceIdentity;
@@ -52,10 +53,18 @@ final class CommandIntegrationTest extends TestCase
         $command = $this->application()->make(InstallCommand::class);
         $command->setLaravel($this->application());
         $tester = new CommandTester($command);
-        $tester->setInputs(['no', 'PostgreSQL', 'Redis', 'Mailpit', 'Meilisearch,Selenium']);
+        $tester->setInputs([
+            'Choose components manually',
+            'PostgreSQL',
+            'Redis',
+            'Mailpit',
+            'Meilisearch,Selenium',
+            'yes',
+            'no',
+        ]);
 
         self::assertSame(0, $tester->execute([]), $tester->getDisplay());
-        self::assertStringContainsString('No external infrastructure configuration was detected.', $tester->getDisplay());
+        self::assertStringNotContainsString('No external infrastructure configuration was detected.', $tester->getDisplay());
 
         $environment = (string) file_get_contents($this->workspaceDirectory.'/.env.harbour');
         self::assertStringContainsString('DB_CONNECTION=pgsql', $environment);
@@ -63,6 +72,8 @@ final class CommandIntegrationTest extends TestCase
         self::assertStringContainsString('MAIL_MAILER=smtp', $environment);
         self::assertStringContainsString('MEILISEARCH_HOST=', $environment);
         self::assertStringContainsString('DUSK_DRIVER_URL=', $environment);
+        self::assertFileExists($this->workspaceDirectory.'/docker-compose.harbour.yml');
+        self::assertStringContainsString('127.0.0.1:${DB_PORT}:5432', (string) file_get_contents($this->workspaceDirectory.'/docker-compose.harbour.yml'));
     }
 
     public function test_json_install_requires_explicit_non_interactive_choices(): void
@@ -127,12 +138,29 @@ final class CommandIntegrationTest extends TestCase
         $command = $this->application()->make(InstallCommand::class);
         $command->setLaravel($this->application());
         $tester = new CommandTester($command);
-        $tester->setInputs(['yes']);
+        $tester->setInputs(['Auto-detect from this project', 'yes']);
 
         self::assertSame(0, $tester->execute([]), $tester->getDisplay());
         self::assertStringContainsString('Harbour detected this project configuration.', $tester->getDisplay());
         self::assertStringContainsString('Detected from', $tester->getDisplay());
         self::assertStringContainsString('REDIS_PORT=16379', (string) file_get_contents($this->workspaceDirectory.'/.env.harbour'));
+    }
+
+    public function test_interactive_detection_honours_the_start_switch(): void
+    {
+        unlink($this->workspaceDirectory.'/.env.harbour');
+        file_put_contents($this->workspaceDirectory.'/composer.json', "{\n    \"name\": \"acme/app\"\n}\n");
+        $starter = new FakeInstalledWorkspaceStarter;
+        $this->application()->instance(InstalledWorkspaceStarter::class, $starter);
+
+        $command = $this->application()->make(InstallCommand::class);
+        $command->setLaravel($this->application());
+        $tester = new CommandTester($command);
+        $tester->setInputs(['Auto-detect from this project', 'yes']);
+
+        self::assertSame(0, $tester->execute(['--start' => true]), $tester->getDisplay());
+        self::assertTrue($starter->started);
+        self::assertStringContainsString('Harbour is ready.', $tester->getDisplay());
     }
 
     public function test_explicit_options_override_only_the_requested_detected_categories(): void
@@ -168,6 +196,77 @@ final class CommandIntegrationTest extends TestCase
         self::assertStringContainsString('"database":"mysql"', $output);
         self::assertStringContainsString('"cache":"memcached"', $output);
         self::assertStringContainsString('"services":["mysql","memcached","typesense","rustfs","rabbitmq","soketi"]', $output);
+    }
+
+    public function test_compose_switch_generates_managed_service_configuration(): void
+    {
+        unlink($this->workspaceDirectory.'/.env.harbour');
+        file_put_contents($this->workspaceDirectory.'/composer.json', "{\n    \"name\": \"acme/app\"\n}\n");
+
+        self::assertSame(0, Artisan::call('workspace:install', [
+            '--database' => 'postgresql',
+            '--cache' => 'redis',
+            '--mail' => 'mailpit',
+            '--with' => 'meilisearch,minio',
+            '--compose' => true,
+            '--json' => true,
+        ]));
+
+        $output = Artisan::output();
+        self::assertStringContainsString('"provider":"compose"', $output);
+        self::assertStringContainsString('docker-compose.harbour.yml', $output);
+        self::assertFileExists($this->workspaceDirectory.'/docker-compose.harbour.yml');
+    }
+
+    public function test_compose_provider_requires_a_service_backed_selection(): void
+    {
+        file_put_contents($this->workspaceDirectory.'/composer.json', "{\n    \"name\": \"acme/app\"\n}\n");
+
+        self::assertSame(1, Artisan::call('workspace:install', [
+            '--database' => 'sqlite',
+            '--cache' => 'file',
+            '--mail' => 'log',
+            '--with' => 'none',
+            '--compose' => true,
+            '--json' => true,
+        ]));
+
+        self::assertStringContainsString('INVALID_INSTALL_SELECTION', Artisan::output());
+        self::assertFileDoesNotExist($this->workspaceDirectory.'/docker-compose.harbour.yml');
+    }
+
+    public function test_invalid_provider_is_rejected_before_interactive_selection(): void
+    {
+        file_put_contents($this->workspaceDirectory.'/composer.json', "{\n    \"name\": \"acme/app\"\n}\n");
+
+        self::assertSame(1, Artisan::call('workspace:install', [
+            '--database' => 'pgsql',
+            '--provider' => 'remote',
+            '--json' => true,
+        ]));
+
+        self::assertStringContainsString('INVALID_INSTALL_SELECTION', Artisan::output());
+        self::assertFileDoesNotExist($this->workspaceDirectory.'/config/harbour.php');
+    }
+
+    public function test_start_switch_sets_up_the_workspace_after_installation(): void
+    {
+        unlink($this->workspaceDirectory.'/.env.harbour');
+        file_put_contents($this->workspaceDirectory.'/composer.json', "{\n    \"name\": \"acme/app\"\n}\n");
+        $starter = new FakeInstalledWorkspaceStarter;
+        $this->application()->instance(InstalledWorkspaceStarter::class, $starter);
+
+        self::assertSame(0, Artisan::call('workspace:install', [
+            '--database' => 'sqlite',
+            '--cache' => 'file',
+            '--mail' => 'log',
+            '--with' => 'none',
+            '--start' => true,
+            '--json' => true,
+        ]));
+
+        self::assertTrue($starter->started);
+        self::assertStringContainsString('"started":true', Artisan::output());
     }
 
     public function test_commands_report_absent_workspace_and_structured_errors(): void
@@ -290,6 +389,18 @@ final class CommandIntegrationTest extends TestCase
         $output = Artisan::output();
         self::assertStringContainsString('UNSAFE_OPERATION', $output);
         self::assertStringContainsString('identity exploded', $output);
+    }
+}
+
+final class FakeInstalledWorkspaceStarter implements InstalledWorkspaceStarter
+{
+    public bool $started = false;
+
+    public function start(): string
+    {
+        $this->started = true;
+
+        return 'Harbour is ready.';
     }
 }
 

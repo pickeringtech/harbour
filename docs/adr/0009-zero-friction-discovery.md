@@ -18,9 +18,10 @@ tax without improving the normal worktree case.
 
 ## Decision
 
-`workspace:install` performs read-only discovery of conventional Compose files,
-`herd.yml`, `.env`, and `.env.example`. It presents one inferred Harbour plan
-and asks the user to approve it. Declining opens the detailed selectors.
+`workspace:install` first asks whether the user wants read-only discovery or
+manual selection. Discovery reads conventional Compose files, `herd.yml`,
+`.env`, and `.env.example`, then presents one inferred Harbour plan for
+approval. Declining opens the detailed selectors.
 Automation may accept the same deterministic proposal with `--detect`, while
 explicit category options remain authoritative.
 

@@ -92,10 +92,16 @@ final readonly class WorkspaceManager
                 $state = $this->environment->prepare($state);
                 $this->states->save($state);
 
+                // Managed infrastructure must be listening before Harbour creates
+                // logical databases or runs Laravel migrations against it.
+                $state = $this->setupDockerResources($state);
+                $infrastructureVariables = $this->resolveVariables($state, null, true);
+                $state = $this->setupComposeResources($state, $infrastructureVariables);
+
                 $databaseName = null;
                 if ((bool) $this->config->get('harbour.database.enabled', true)) {
                     $database = $this->databaseResource($state);
-                    $configuration = $this->databaseConfiguration();
+                    $configuration = $this->databaseConfiguration(state: $state);
 
                     if ($database === null) {
                         $databaseName = $this->desiredDatabase($configuration, $identity);
@@ -119,10 +125,7 @@ final readonly class WorkspaceManager
                     $this->applyDatabaseToLaravel($configuration, $databaseName);
                 }
 
-                $state = $this->setupDockerResources($state);
-
                 $variables = $this->resolveVariables($state, $databaseName, true);
-                $state = $this->setupComposeResources($state, $variables);
                 $state = $state->withVariables($variables->persistable());
                 $this->states->save($state);
                 $rendered = $this->templates->render($this->templateContents(), $variables->values());
@@ -226,9 +229,9 @@ final readonly class WorkspaceManager
 
         foreach (array_reverse($state->resources) as $resource) {
             match ($resource->type) {
-                'compose_project' => $this->compose->destroy($resource, $this->workspacePath),
+                'compose_project' => $this->compose->destroy($resource, $this->workspacePath, $workspace->variables()->values()),
                 'docker_container' => $this->docker->destroy($resource, $this->workspacePath),
-                'database' => $this->databases->destroy($resource, $this->databaseConfiguration($resource->driver), $this->workspacePath),
+                'database' => $this->databases->destroy($resource, $this->databaseConfiguration($resource->driver, $state), $this->workspacePath),
                 default => null,
             };
         }
@@ -368,7 +371,7 @@ final readonly class WorkspaceManager
         return array_values($unique);
     }
 
-    private function databaseConfiguration(?string $forceDriver = null): DatabaseConfiguration
+    private function databaseConfiguration(?string $forceDriver = null, ?WorkspaceState $state = null): DatabaseConfiguration
     {
         $configured = $this->config->get('harbour.database.connection');
         if ($forceDriver !== null) {
@@ -386,7 +389,26 @@ final readonly class WorkspaceManager
         if (! is_array($data)) {
             throw new HarbourException(ErrorCode::InvalidConfiguration, "Laravel database connection [{$connection}] is not configured.");
         }
-        $data['driver'] = $forceDriver ?? ($data['driver'] ?? $connection);
+        if ($forceDriver !== null) {
+            $data['driver'] = $forceDriver;
+        }
+
+        if ($state !== null && $this->config->get('harbour.installation.provider') === 'compose') {
+            $template = $this->environmentFile->parse($this->templateContents());
+            foreach ([
+                'host' => 'DB_HOST',
+                'port' => 'DB_PORT',
+                'username' => 'DB_USERNAME',
+                'password' => 'DB_PASSWORD',
+            ] as $key => $variable) {
+                if (isset($template[$variable])) {
+                    $data[$key] = $this->managedDatabaseValue($template[$variable], $state);
+                }
+            }
+            if (($data['driver'] ?? null) === 'pgsql') {
+                $data['harbour_admin_database'] = 'postgres';
+            }
+        }
 
         return DatabaseConfiguration::fromLaravel($this->stringKeyedArray($data));
     }
@@ -407,7 +429,29 @@ final readonly class WorkspaceManager
             $connection = $configuration->driver;
         }
         $this->config->set('database.default', $connection);
+        $this->config->set('database.connections.'.$connection.'.host', $configuration->host);
+        $this->config->set('database.connections.'.$connection.'.port', $configuration->port);
+        $this->config->set('database.connections.'.$connection.'.username', $configuration->username);
+        $this->config->set('database.connections.'.$connection.'.password', $configuration->password);
         $this->config->set('database.connections.'.$connection.'.database', $database);
+    }
+
+    private function managedDatabaseValue(string $value, WorkspaceState $state): string|int
+    {
+        if (preg_match('/\A\$\{([A-Z][A-Z0-9_]*)\}\z/', $value, $matches) === 1) {
+            $variable = $matches[1];
+            $allocation = $state->allocations[$variable] ?? null;
+            if (! is_int($allocation)) {
+                throw new HarbourException(ErrorCode::InvalidConfiguration, "Managed database variable [{$variable}] has no port allocation.");
+            }
+
+            return $allocation;
+        }
+        if (str_contains($value, '${')) {
+            throw new HarbourException(ErrorCode::InvalidConfiguration, 'Managed database connection values must be literal or allocated port variables.');
+        }
+
+        return $value;
     }
 
     private function migrateAndSeed(): void

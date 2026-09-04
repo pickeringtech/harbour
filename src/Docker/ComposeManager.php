@@ -52,27 +52,32 @@ final readonly class ComposeManager
     public function start(OwnedResource $resource, string $workspacePath, array $environment): void
     {
         [$project, $file, $workingDirectory] = $this->evidence($resource, $workspacePath);
-        $result = $this->processes->run($this->command($project, $file, $workingDirectory, ['up', '-d']), $workingDirectory, $environment);
+        $result = $this->processes->run(
+            $this->command($project, $file, $workingDirectory, ['up', '--detach', '--wait', '--wait-timeout', '60']),
+            $workingDirectory,
+            $environment,
+        );
 
         if (! $result->successful()) {
             throw new HarbourException(ErrorCode::ComposeStartFailed, 'Unable to start the Harbour Compose project.', ['exit_code' => $result->exitCode]);
         }
     }
 
-    public function destroy(OwnedResource $resource, string $workspacePath): void
+    /** @param array<string, string> $environment */
+    public function destroy(OwnedResource $resource, string $workspacePath, array $environment = []): void
     {
         [$project, $file, $workingDirectory] = $this->evidence($resource, $workspacePath);
-        $ps = $this->processes->run($this->command($project, $file, $workingDirectory, ['ps', '-q']), $workingDirectory);
+        $ps = $this->processes->run($this->command($project, $file, $workingDirectory, ['ps', '-q']), $workingDirectory, $environment);
         if (! $ps->successful()) {
             throw new HarbourException(ErrorCode::ProcessFailed, 'Unable to inspect a Harbour Compose project before removal.', ['exit_code' => $ps->exitCode]);
         }
         foreach (array_filter(preg_split('/\R/', $ps->output) ?: []) as $container) {
-            $inspect = $this->processes->run(['docker', 'inspect', '--format', '{{ index .Config.Labels "com.docker.compose.project" }}', $container], $workingDirectory);
+            $inspect = $this->processes->run(['docker', 'inspect', '--format', '{{ index .Config.Labels "com.docker.compose.project" }}', $container], $workingDirectory, $environment);
             if (! $inspect->successful() || trim($inspect->output) !== $project) {
                 throw new HarbourException(ErrorCode::DockerResourceNotOwned, 'Compose container labels do not match the recorded project.');
             }
         }
-        $down = $this->processes->run($this->command($project, $file, $workingDirectory, ['down', '--remove-orphans']), $workingDirectory);
+        $down = $this->processes->run($this->command($project, $file, $workingDirectory, ['down', '--remove-orphans']), $workingDirectory, $environment);
         if (! $down->successful()) {
             throw new HarbourException(ErrorCode::ProcessFailed, 'Unable to remove a Harbour Compose project.', ['exit_code' => $down->exitCode]);
         }

@@ -80,6 +80,49 @@ final class ProjectInstallerTest extends TestCase
         self::assertSame(['@php artisan workspace:status'], $scripts['workspace:status']);
     }
 
+    public function test_it_generates_an_idempotent_compose_policy_for_managed_services(): void
+    {
+        $installer = new ProjectInstaller($this->workspace);
+        $selection = InstallationSelection::fromOptions('pgsql', 'redis', 'mailpit', 'meilisearch,minio', 'compose');
+
+        $first = $installer->install($selection);
+
+        self::assertContains('docker-compose.harbour.yml', $first->created);
+        self::assertFileExists($this->workspace.'/docker-compose.harbour.yml');
+        self::assertStringContainsString('127.0.0.1:${DB_PORT}:5432', (string) file_get_contents($this->workspace.'/docker-compose.harbour.yml'));
+        self::assertStringContainsString('DB_PORT=${DB_PORT}', (string) file_get_contents($this->workspace.'/.env.harbour'));
+
+        $configuration = require $this->workspace.'/config/harbour.php';
+        self::assertIsArray($configuration);
+        $installation = $configuration['installation'] ?? null;
+        $compose = $configuration['compose'] ?? null;
+        self::assertIsArray($installation);
+        self::assertIsArray($compose);
+        $services = $compose['services'] ?? null;
+        self::assertIsArray($services);
+        $ports = $services['ports'] ?? null;
+        self::assertIsArray($ports);
+        self::assertSame('compose', $installation['provider'] ?? null);
+        self::assertSame('docker-compose.harbour.yml', $services['file'] ?? null);
+        self::assertArrayHasKey('DB_PORT', $ports);
+        self::assertSame([], $configuration['services'] ?? null);
+
+        $second = $installer->install($selection);
+        self::assertContains('docker-compose.harbour.yml', $second->unchanged);
+    }
+
+    public function test_it_never_overwrites_an_existing_compose_file(): void
+    {
+        file_put_contents($this->workspace.'/docker-compose.harbour.yml', "services:\n  custom: {}\n");
+
+        $result = (new ProjectInstaller($this->workspace))->install(
+            InstallationSelection::fromOptions('pgsql', 'none', 'none', 'none', 'compose'),
+        );
+
+        self::assertSame("services:\n  custom: {}\n", file_get_contents($this->workspace.'/docker-compose.harbour.yml'));
+        self::assertContains('docker-compose.harbour.yml', $result->unchanged);
+    }
+
     public function test_it_rejects_an_unsafe_installation_target(): void
     {
         symlink('/tmp', $this->workspace.'/.env.harbour');

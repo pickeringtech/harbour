@@ -9,8 +9,11 @@ use Illuminate\Contracts\Console\Kernel;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PickeringTech\Harbour\Contracts\CommandRunner;
+use PickeringTech\Harbour\Contracts\DatabaseLifecycleDriver;
 use PickeringTech\Harbour\Contracts\WorkspaceStateRepository;
 use PickeringTech\Harbour\Contracts\WorkspaceVariableResolver;
+use PickeringTech\Harbour\Database\DatabaseConfiguration;
+use PickeringTech\Harbour\Database\DatabaseManager;
 use PickeringTech\Harbour\Docker\ComposeManager;
 use PickeringTech\Harbour\Docker\DockerManager;
 use PickeringTech\Harbour\Exceptions\ErrorCode;
@@ -132,6 +135,37 @@ final class WorkspaceManagerCoverageTest extends TestCase
         self::assertNull($manager->current());
         self::assertSame(1, $runner->dockerRemovals);
         self::assertSame(1, $runner->composeDowns);
+    }
+
+    public function test_managed_compose_services_are_ready_before_database_creation(): void
+    {
+        file_put_contents($this->workspaceDirectory.'/compose.yml', "services: {}\n");
+        file_put_contents($this->workspaceDirectory.'/.env.harbour', <<<'ENV'
+        APP_PORT=${APP_PORT}
+        DB_HOST=127.0.0.1
+        DB_PORT=${DB_PORT}
+        DB_USERNAME=harbour
+        DB_PASSWORD=harbour
+        ENV);
+        $config = $this->application()->make(Repository::class);
+        $config->set('harbour.installation.provider', 'compose');
+        $config->set('harbour.ports.allocations.DB_PORT', ['range' => [18800, 18820]]);
+        $config->set('harbour.compose', ['services' => ['file' => 'compose.yml']]);
+        $config->set('harbour.database.enabled', true);
+        $config->set('harbour.database.connection', 'sqlite');
+        $config->set('harbour.database.migrate', false);
+
+        $sequence = new WorkspaceSetupSequence;
+        $this->application()->instance(CommandRunner::class, new OrderedWorkspaceRunner($sequence));
+        $this->application()->instance(DatabaseManager::class, new DatabaseManager([new OrderedDatabaseDriver($sequence)]));
+        $this->application()->forgetInstance(ComposeManager::class);
+        $this->application()->forgetInstance(WorkspaceManager::class);
+
+        $manager = $this->application()->make(WorkspaceManager::class);
+        $manager->setup();
+
+        self::assertSame(['compose', 'database'], $sequence->events);
+        $manager->teardown(true);
     }
 
     public function test_fresh_setup_recreates_only_owned_sqlite_and_detects_missing_ownership(): void
@@ -262,6 +296,50 @@ final class ExplodingVariableResolver implements WorkspaceVariableResolver
     {
         throw new RuntimeException('resolver exploded');
     }
+}
+
+final class WorkspaceSetupSequence
+{
+    /** @var list<string> */
+    public array $events = [];
+}
+
+final readonly class OrderedWorkspaceRunner implements CommandRunner
+{
+    public function __construct(private WorkspaceSetupSequence $sequence) {}
+
+    public function run(array $command, string $workingDirectory, array $environment = []): ProcessResult
+    {
+        if (in_array('up', $command, true)) {
+            $this->sequence->events[] = 'compose';
+        }
+
+        return new ProcessResult(0, '');
+    }
+}
+
+final readonly class OrderedDatabaseDriver implements DatabaseLifecycleDriver
+{
+    public function __construct(private WorkspaceSetupSequence $sequence) {}
+
+    public function supports(string $driver): bool
+    {
+        return $driver === 'sqlite';
+    }
+
+    public function create(OwnedResource $resource, string $workspacePath, DatabaseConfiguration $configuration): OwnedResource
+    {
+        $this->sequence->events[] = 'database';
+
+        return $resource;
+    }
+
+    public function exists(OwnedResource $resource, DatabaseConfiguration $configuration): bool
+    {
+        return true;
+    }
+
+    public function destroy(OwnedResource $resource, DatabaseConfiguration $configuration, string $workspacePath): void {}
 }
 
 final class WorkspaceManagerCommandRunner implements CommandRunner

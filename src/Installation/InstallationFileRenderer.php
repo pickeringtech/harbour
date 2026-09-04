@@ -8,6 +8,8 @@ use LogicException;
 
 final class InstallationFileRenderer
 {
+    public function __construct(private readonly InstallationServiceCatalog $services = new InstallationServiceCatalog) {}
+
     public function environment(InstallationSelection|InstallationDiscovery $installation): string
     {
         $discovery = $this->discovery($installation);
@@ -47,10 +49,19 @@ final class InstallationFileRenderer
         $databaseConnection = $databaseEnabled ? $selection->database : null;
         $installation = $this->export([...$selection->toArray(), 'discovery' => $discovery->metadata()], 1);
         $services = [];
-        foreach ($selection->services() as $service) {
-            $services[$service] = ['driver' => 'shared'];
+        if ($selection->provider === 'shared') {
+            foreach ($selection->services() as $service) {
+                $services[$service] = ['driver' => 'shared'];
+            }
         }
         $exportedServices = $this->export($services, 1);
+        $compose = $selection->provider === 'compose'
+            ? ['services' => [
+                'file' => 'docker-compose.harbour.yml',
+                'ports' => $this->services->portDefinitions($selection->services()),
+            ]]
+            : [];
+        $exportedCompose = $this->export($compose, 1);
         $enabled = $databaseEnabled ? 'true' : 'false';
         $connection = $databaseConnection === null ? 'null' : "'{$databaseConnection}'";
 
@@ -105,10 +116,9 @@ final class InstallationFileRenderer
             'variables' => [],
             'resolvers' => [],
 
-            // Install selections use existing shared infrastructure. Change an entry
-            // to the documented Docker configuration when isolation needs a container.
+            // Shared services are reused; Compose services are owned per workspace.
             'services' => {$exportedServices},
-            'compose' => [],
+            'compose' => {$exportedCompose},
 
             'hooks' => [
                 'before_setup' => [],
@@ -168,9 +178,14 @@ final class InstallationFileRenderer
 
     private function databaseEnvironment(string $database, InstallationDiscovery $discovery): string
     {
-        $port = $discovery->port($database, $database === 'pgsql' ? 5432 : ($database === 'mongodb' ? 27017 : 3306));
-        $username = $discovery->templateValue('DB_USERNAME', $database === 'pgsql' ? 'postgres' : 'root');
-        $password = $discovery->templateValue('DB_PASSWORD', '');
+        $port = $this->servicePort($database, $discovery, $database === 'pgsql' ? 5432 : ($database === 'mongodb' ? 27017 : 3306));
+        $managed = $discovery->selection->provider === 'compose';
+        $username = $managed && $database === 'pgsql'
+            ? 'harbour'
+            : $discovery->templateValue('DB_USERNAME', $database === 'pgsql' ? 'postgres' : 'root');
+        $password = $managed && in_array($database, ['mysql', 'mariadb', 'pgsql'], true)
+            ? 'harbour'
+            : $discovery->templateValue('DB_PASSWORD', '');
         $mongodbUri = $discovery->serviceValue('MONGODB_URI', 'mongodb', "mongodb://127.0.0.1:{$port}");
         $host = $discovery->serviceHost('DB_HOST', $database);
 
@@ -187,7 +202,7 @@ final class InstallationFileRenderer
 
     private function cacheEnvironment(string $cache, InstallationDiscovery $discovery): string
     {
-        $port = $discovery->port($cache, $cache === 'memcached' ? 11211 : 6379);
+        $port = $this->servicePort($cache, $discovery, $cache === 'memcached' ? 11211 : 6379);
         $password = $discovery->templateValue('REDIS_PASSWORD', 'null');
         $redisHost = $discovery->serviceHost('REDIS_HOST', $cache);
         $memcachedHost = $discovery->serviceHost('MEMCACHED_HOST', 'memcached');
@@ -205,8 +220,10 @@ final class InstallationFileRenderer
 
     private function mailEnvironment(string $mail, InstallationDiscovery $discovery): string
     {
-        $port = $discovery->port('mailpit', 1025);
-        $dashboardPort = $discovery->port('mailpit-dashboard', 8025);
+        $port = $this->servicePort('mailpit', $discovery, 1025);
+        $dashboardPort = $discovery->selection->provider === 'compose'
+            ? '\${MAILPIT_DASHBOARD_PORT}'
+            : (string) $discovery->port('mailpit-dashboard', 8025);
         $host = $discovery->serviceHost('MAIL_HOST', 'mailpit');
         $username = $discovery->templateValue('MAIL_USERNAME', 'null');
         $password = $discovery->templateValue('MAIL_PASSWORD', 'null');
@@ -222,7 +239,7 @@ final class InstallationFileRenderer
 
     private function serviceEnvironment(string $service, InstallationDiscovery $discovery): string
     {
-        $port = $discovery->port($service, match ($service) {
+        $port = $this->servicePort($service, $discovery, match ($service) {
             'meilisearch' => 7700,
             'typesense' => 8108,
             'minio', 'rustfs' => 9000,
@@ -254,7 +271,7 @@ final class InstallationFileRenderer
             'typesense' => "TYPESENSE_HOST={$typesenseHost}\nTYPESENSE_PORT={$port}\nTYPESENSE_PROTOCOL={$typesenseProtocol}\nTYPESENSE_API_KEY={$typesenseKey}\nTYPESENSE_COLLECTION_PREFIX=\${SEARCH_PREFIX}",
             'minio' => "MINIO_ENDPOINT={$minioEndpoint}\nMINIO_ACCESS_KEY_ID={$minioKey}\nMINIO_SECRET_ACCESS_KEY={$minioSecret}\nMINIO_BUCKET=\${OBJECT_STORAGE_BUCKET}\nMINIO_USE_PATH_STYLE_ENDPOINT=true",
             'rustfs' => "RUSTFS_ENDPOINT={$rustfsEndpoint}\nRUSTFS_ACCESS_KEY_ID={$rustfsKey}\nRUSTFS_SECRET_ACCESS_KEY={$rustfsSecret}\nRUSTFS_BUCKET=\${OBJECT_STORAGE_BUCKET}\nRUSTFS_USE_PATH_STYLE_ENDPOINT=true",
-            'rabbitmq' => "QUEUE_CONNECTION=rabbitmq\nRABBITMQ_HOST={$rabbitmqHost}\nRABBITMQ_PORT={$port}\nRABBITMQ_QUEUE=\${QUEUE_NAME}",
+            'rabbitmq' => "QUEUE_CONNECTION=rabbitmq\nRABBITMQ_HOST={$rabbitmqHost}\nRABBITMQ_PORT={$port}\nRABBITMQ_USER=harbour\nRABBITMQ_PASSWORD=harbour\nRABBITMQ_QUEUE=\${QUEUE_NAME}",
             'selenium' => "DUSK_DRIVER_URL={$seleniumUrl}",
             'soketi' => "BROADCAST_CONNECTION=pusher\nPUSHER_APP_ID={$pusherId}\nPUSHER_APP_KEY={$pusherKey}\nPUSHER_APP_SECRET={$pusherSecret}\nPUSHER_HOST={$pusherHost}\nPUSHER_PORT={$port}\nPUSHER_SCHEME={$pusherScheme}\nVITE_PUSHER_APP_KEY={$pusherKey}\nVITE_PUSHER_HOST={$pusherHost}\nVITE_PUSHER_PORT={$port}\nVITE_PUSHER_SCHEME={$pusherScheme}",
             default => throw new LogicException("Unsupported rendered service [{$service}]."),
@@ -286,5 +303,15 @@ final class InstallationFileRenderer
         return $installation instanceof InstallationDiscovery
             ? $installation
             : InstallationDiscovery::explicit($installation);
+    }
+
+    private function servicePort(string $service, InstallationDiscovery $discovery, int $default): string
+    {
+        if ($discovery->selection->provider === 'compose'
+            && in_array($service, InstallationSelection::SAIL_SERVICES, true)) {
+            return '${'.$this->services->primaryPortVariable($service).'}';
+        }
+
+        return (string) $discovery->port($service, $default);
     }
 }

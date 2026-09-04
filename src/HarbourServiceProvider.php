@@ -17,6 +17,7 @@ use PickeringTech\Harbour\Console\SetupCommand;
 use PickeringTech\Harbour\Console\StatusCommand;
 use PickeringTech\Harbour\Console\TeardownCommand;
 use PickeringTech\Harbour\Contracts\CommandRunner;
+use PickeringTech\Harbour\Contracts\InstalledWorkspaceStarter;
 use PickeringTech\Harbour\Contracts\PortAllocationStrategy;
 use PickeringTech\Harbour\Contracts\WorkspaceIdentityStrategy;
 use PickeringTech\Harbour\Contracts\WorkspaceStateRepository;
@@ -30,6 +31,7 @@ use PickeringTech\Harbour\Environment\EnvironmentManager;
 use PickeringTech\Harbour\Exceptions\ErrorCode;
 use PickeringTech\Harbour\Exceptions\HarbourException;
 use PickeringTech\Harbour\Identity\DefaultWorkspaceIdentityStrategy;
+use PickeringTech\Harbour\Installation\ArtisanWorkspaceStarter;
 use PickeringTech\Harbour\Installation\ProjectConfigurationDetector;
 use PickeringTech\Harbour\Installation\ProjectInstaller;
 use PickeringTech\Harbour\Ports\DefaultPortAllocationStrategy;
@@ -81,6 +83,10 @@ final class HarbourServiceProvider extends ServiceProvider
         $this->app->singleton(EnvironmentManager::class, fn (Application $app): EnvironmentManager => new EnvironmentManager($this->workspacePath($app)));
         $this->app->singleton(ProjectInstaller::class, fn (Application $app): ProjectInstaller => new ProjectInstaller($this->workspacePath($app)));
         $this->app->singleton(ProjectConfigurationDetector::class, fn (Application $app): ProjectConfigurationDetector => new ProjectConfigurationDetector($this->workspacePath($app)));
+        $this->app->singleton(InstalledWorkspaceStarter::class, fn (Application $app): InstalledWorkspaceStarter => new ArtisanWorkspaceStarter(
+            $this->workspacePath($app),
+            $app->make(CommandRunner::class),
+        ));
         $this->app->singleton(LifecycleLock::class, fn (Application $app): LifecycleLock => new LifecycleLock($this->workspacePath($app).'/.harbour/locks/lifecycle.lock'));
         $this->app->singleton(DatabaseManager::class, fn (Application $app): DatabaseManager => new DatabaseManager([
             $app->make(PostgreSqlDatabaseDriver::class),

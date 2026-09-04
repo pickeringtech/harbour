@@ -6,6 +6,25 @@ All notable changes will be documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- The installer can generate a workspace-managed `docker-compose.harbour.yml`
+  for any supported Sail-compatible service selection and optionally start the
+  first workspace immediately.
+- `workspace:install` now exposes deterministic `--provider`, `--compose`, and
+  `--start` options for agents and CI.
+- Generated Compose services have real validation, lifecycle, readiness,
+  database connectivity, idempotency, and teardown coverage.
+
+### Changed
+
+- Interactive installation now begins with an explicit auto-detect or manual
+  choice and uses Laravel Prompts' keyboard TUI throughout.
+- Additional components use a true multi-select control instead of repeated or
+  numeric choices.
+- Managed Docker/Compose infrastructure starts and becomes ready before Harbour
+  creates its logical database or runs migrations.
+
 ## [0.0.2] - 2026-09-03
 
 ### Changed

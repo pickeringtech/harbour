@@ -4,9 +4,16 @@ declare(strict_types=1);
 
 namespace PickeringTech\Harbour\Console;
 
+use function Laravel\Prompts\confirm;
+use function Laravel\Prompts\intro;
+use function Laravel\Prompts\multiselect;
+use function Laravel\Prompts\select;
+
+use PickeringTech\Harbour\Contracts\InstalledWorkspaceStarter;
 use PickeringTech\Harbour\Exceptions\ErrorCode;
 use PickeringTech\Harbour\Exceptions\HarbourException;
 use PickeringTech\Harbour\Installation\InstallationDiscovery;
+use PickeringTech\Harbour\Installation\InstallationPlan;
 use PickeringTech\Harbour\Installation\InstallationSelection;
 use PickeringTech\Harbour\Installation\ProjectConfigurationDetector;
 use PickeringTech\Harbour\Installation\ProjectInstaller;
@@ -19,24 +26,42 @@ final class InstallCommand extends WorkspaceCommand
         {--m|mail= : Mail: none, log, mailpit}
         {--with= : Sail-compatible comma-separated services, or none}
         {--detect : Accept the configuration inferred from Sail, Herd, and Laravel files}
+        {--provider= : Service provider: shared or compose}
+        {--compose : Generate a workspace-managed Docker Compose stack}
+        {--start : Set up this workspace and start managed services after installation}
         {--json : Emit stable JSON; use --detect or supply selections as options}';
 
     protected $description = 'Prepare this Laravel project for Harbour without overwriting existing choices';
 
-    public function handle(ProjectInstaller $installer, ProjectConfigurationDetector $detector): int
-    {
+    public function handle(
+        ProjectInstaller $installer,
+        ProjectConfigurationDetector $detector,
+        InstalledWorkspaceStarter $starter,
+    ): int {
         $json = (bool) $this->option('json');
 
-        return $this->executeSafely($json, function () use ($installer, $detector, $json): int {
-            $discovery = $this->installation($json, $detector);
+        return $this->executeSafely($json, function () use ($installer, $detector, $starter, $json): int {
+            $plan = $this->installation($json, $detector);
+            $discovery = $plan->discovery;
             $selection = $discovery->selection;
             $result = $installer->install($discovery);
+            $startOutput = '';
+
+            if ($plan->start) {
+                if ($json) {
+                    $startOutput = $starter->start();
+                } else {
+                    $this->components->task('Setting up this workspace', function () use ($starter, &$startOutput): void {
+                        $startOutput = $starter->start();
+                    });
+                }
+            }
 
             if ($json) {
                 $this->line((string) json_encode([
                     'version' => 1,
                     'ok' => true,
-                    'installation' => $result->toArray(),
+                    'installation' => [...$result->toArray(), 'started' => $plan->start],
                 ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
 
                 return self::SUCCESS;
@@ -46,7 +71,8 @@ final class InstallCommand extends WorkspaceCommand
             $this->components->twoColumnDetail('Database', $selection->database);
             $this->components->twoColumnDetail('Cache', $selection->cache);
             $this->components->twoColumnDetail('Mail', $selection->mail);
-            $this->components->twoColumnDetail('Shared services', $selection->services() === [] ? 'none' : implode(', ', $selection->services()));
+            $this->components->twoColumnDetail('Provider', $selection->provider === 'compose' ? 'Docker Compose' : 'shared infrastructure');
+            $this->components->twoColumnDetail('Services', $selection->services() === [] ? 'none' : implode(', ', $selection->services()));
             if ($discovery->sources !== []) {
                 $this->components->twoColumnDetail('Detected from', implode(', ', $discovery->sources));
             }
@@ -64,19 +90,28 @@ final class InstallCommand extends WorkspaceCommand
                 $this->components->warn("Kept existing {$path}; Harbour never replaces a project-defined script.");
             }
             $this->newLine();
-            $this->line('Review <comment>.env.harbour</comment>, commit the project files, then run <comment>composer workspace:setup</comment>.');
+            if ($plan->start) {
+                if ($startOutput !== '') {
+                    $this->line($startOutput);
+                }
+                $this->line('The project policy is ready and this workspace is running.');
+            } else {
+                $this->line('Review <comment>.env.harbour</comment>, commit the project files, then run <comment>composer workspace:setup</comment>.');
+            }
 
             return self::SUCCESS;
         });
     }
 
-    private function installation(bool $json, ProjectConfigurationDetector $detector): InstallationDiscovery
+    private function installation(bool $json, ProjectConfigurationDetector $detector): InstallationPlan
     {
         $database = $this->stringOption('database');
         $cache = $this->stringOption('cache');
         $mail = $this->stringOption('mail');
         $with = $this->stringOption('with');
+        $provider = $this->providerOption();
         $detect = (bool) $this->option('detect');
+        $start = (bool) $this->option('start');
         $explicit = $database !== null || $cache !== null || $mail !== null || $with !== null;
 
         if ($detect) {
@@ -86,13 +121,17 @@ final class InstallCommand extends WorkspaceCommand
                 $cache ?? $discovery->selection->cache,
                 $mail ?? $discovery->selection->mail,
                 $with ?? $this->serviceList($discovery->selection->additionalServices),
+                $provider ?? $discovery->selection->provider,
             );
 
-            return $discovery->withSelection($selection);
+            return new InstallationPlan($discovery->withSelection($selection), $start);
         }
 
         if ($explicit) {
-            return InstallationDiscovery::explicit(InstallationSelection::fromOptions($database, $cache, $mail, $with));
+            return new InstallationPlan(
+                InstallationDiscovery::explicit(InstallationSelection::fromOptions($database, $cache, $mail, $with, $provider)),
+                $start,
+            );
         }
 
         if ($json || ! $this->input->isInteractive()) {
@@ -102,58 +141,123 @@ final class InstallCommand extends WorkspaceCommand
             );
         }
 
-        $discovery = $detector->discover();
-        $this->showProposal($discovery);
-        $question = $discovery->detected
-            ? 'Create Harbour configuration from these detected settings?'
-            : 'Create a zero-dependency Harbour setup with these settings?';
+        intro('Configure Harbour');
+        $mode = select(
+            label: 'How would you like to configure this project?',
+            options: [
+                'detect' => 'Auto-detect from this project',
+                'manual' => 'Choose components manually',
+            ],
+            default: 'detect',
+            hint: 'Use the arrow keys and press Enter.',
+        );
 
-        if ($this->confirm($question, true)) {
-            return $discovery;
+        if ($mode === 'detect') {
+            $discovery = $detector->discover();
+            $this->showProposal($discovery);
+            $question = $discovery->detected
+                ? 'Use these detected settings?'
+                : 'Use this zero-dependency setup?';
+
+            if (confirm($question, true)) {
+                return new InstallationPlan($discovery, $start);
+            }
+        } elseif ($mode === 'manual') {
+            $discovery = $detector->discover();
+        } else {
+            throw new HarbourException(ErrorCode::InvalidInstallSelection, 'Choose auto-detection or manual component selection.');
         }
 
-        $databaseChoice = $this->choice(
-            'Which database should Harbour isolate?',
-            ['None', 'SQLite', 'MySQL', 'MariaDB', 'PostgreSQL', 'MongoDB'],
-            $this->databaseDefault($discovery->selection->database),
+        $databaseChoice = select(
+            label: 'Which database should Harbour isolate?',
+            options: [
+                'none' => 'None',
+                'sqlite' => 'SQLite',
+                'mysql' => 'MySQL',
+                'mariadb' => 'MariaDB',
+                'pgsql' => 'PostgreSQL',
+                'mongodb' => 'MongoDB',
+            ],
+            default: $discovery->selection->database,
+            scroll: count(InstallationSelection::DATABASES),
+            hint: 'SQLite needs no external service.',
         );
-        $cacheChoice = $this->choice(
-            'Which cache and shared-state store should Laravel use?',
-            ['None', 'File', 'Database', 'Redis', 'Valkey', 'Memcached'],
-            $this->choiceDefault($discovery->selection->cache, ['none', 'file', 'database', 'redis', 'valkey', 'memcached']),
+        $cacheChoice = select(
+            label: 'Which cache and shared-state store should Laravel use?',
+            options: [
+                'none' => 'None / array',
+                'file' => 'File',
+                'database' => 'Database',
+                'redis' => 'Redis',
+                'valkey' => 'Valkey',
+                'memcached' => 'Memcached',
+            ],
+            default: $discovery->selection->cache,
+            scroll: count(InstallationSelection::CACHES),
         );
-        $mailChoice = $this->choice(
-            'Which mail transport should Laravel use locally?',
-            ['None', 'Log', 'Mailpit'],
-            $this->choiceDefault($discovery->selection->mail, ['none', 'log', 'mailpit']),
+        $mailChoice = select(
+            label: 'Which mail transport should Laravel use locally?',
+            options: [
+                'none' => 'None / array',
+                'log' => 'Log',
+                'mailpit' => 'Mailpit',
+            ],
+            default: $discovery->selection->mail,
+            scroll: count(InstallationSelection::MAILERS),
         );
-        $additionalChoice = $this->choice(
-            'Which additional shared services should Harbour configure?',
-            ['Meilisearch', 'Typesense', 'MinIO', 'RustFS', 'RabbitMQ', 'Selenium', 'Soketi'],
-            implode(',', array_map(static fn (string $service): string => match ($service) {
+        $additionalChoice = multiselect(
+            label: 'Which additional components should Harbour configure?',
+            options: [
+                'meilisearch' => 'Meilisearch',
+                'typesense' => 'Typesense',
                 'minio' => 'MinIO',
                 'rustfs' => 'RustFS',
-                default => ucfirst($service),
-            }, $discovery->selection->additionalServices)) ?: null,
-            null,
-            true,
+                'rabbitmq' => 'RabbitMQ',
+                'selenium' => 'Selenium',
+                'soketi' => 'Soketi',
+            ],
+            default: $discovery->selection->additionalServices,
+            scroll: count(InstallationSelection::ADDITIONAL_SERVICES),
+            hint: 'Use Space to select multiple components, then press Enter.',
         );
 
         $additional = [];
-        if (is_array($additionalChoice)) {
-            foreach ($additionalChoice as $service) {
-                $additional[] = $this->choiceString($service, 'additional service');
-            }
+        foreach ($additionalChoice as $service) {
+            $additional[] = $this->choiceString($service, 'additional service');
         }
 
         $selection = InstallationSelection::fromOptions(
-            $this->databaseChoice($databaseChoice),
+            $this->choiceString($databaseChoice, 'database'),
             $this->choiceString($cacheChoice, 'cache'),
             $this->choiceString($mailChoice, 'mail'),
             $additional === [] ? 'none' : implode(',', $additional),
         );
 
-        return $discovery->withManualSelection($selection);
+        if ($provider !== null) {
+            $selection = $selection->withProvider($provider);
+        } elseif ($selection->services() !== []) {
+            $useCompose = confirm(
+                label: 'Use Docker Compose for these service-backed components?',
+                default: false,
+                hint: 'No keeps using existing shared infrastructure.',
+            );
+            if ($useCompose) {
+                $selection = $selection->withProvider('compose');
+            }
+        }
+
+        $startLabel = $selection->provider === 'compose'
+            ? 'Start these Docker Compose components and set up this workspace now?'
+            : 'Set up this workspace now?';
+        $startNow = $start || confirm(
+            label: $startLabel,
+            default: $selection->provider === 'compose',
+            hint: $selection->provider === 'compose'
+                ? 'Harbour will wait until the services are ready.'
+                : 'You can always run composer workspace:setup later.',
+        );
+
+        return new InstallationPlan($discovery->withManualSelection($selection), $startNow);
     }
 
     private function showProposal(InstallationDiscovery $discovery): void
@@ -176,19 +280,6 @@ final class InstallCommand extends WorkspaceCommand
         return $services === [] ? 'none' : implode(',', $services);
     }
 
-    private function databaseDefault(string $database): int
-    {
-        return $this->choiceDefault($database === 'pgsql' ? 'postgresql' : $database, ['none', 'sqlite', 'mysql', 'mariadb', 'postgresql', 'mongodb']);
-    }
-
-    /** @param list<string> $values */
-    private function choiceDefault(string $selected, array $values): int
-    {
-        $index = array_search($selected, $values, true);
-
-        return is_int($index) ? $index : 0;
-    }
-
     private function stringOption(string $name): ?string
     {
         $value = $this->option($name);
@@ -203,11 +294,30 @@ final class InstallCommand extends WorkspaceCommand
         return $value;
     }
 
-    private function databaseChoice(mixed $choice): string
+    private function providerOption(): ?string
     {
-        $value = $this->choiceString($choice, 'database');
+        $provider = $this->stringOption('provider');
+        if ((bool) $this->option('compose')) {
+            if ($provider !== null && strtolower(trim($provider)) !== 'compose') {
+                throw new HarbourException(ErrorCode::InvalidInstallSelection, 'The --compose flag conflicts with --provider='.$provider.'.');
+            }
 
-        return $value === 'postgresql' ? 'pgsql' : $value;
+            return 'compose';
+        }
+
+        if ($provider === null) {
+            return null;
+        }
+
+        $normalized = strtolower(trim($provider));
+        if (! in_array($normalized, InstallationSelection::PROVIDERS, true)) {
+            throw new HarbourException(
+                ErrorCode::InvalidInstallSelection,
+                'Unsupported infrastructure provider ['.$provider.']. Choose one of: '.implode(', ', InstallationSelection::PROVIDERS).'.',
+            );
+        }
+
+        return $normalized;
     }
 
     private function choiceString(mixed $choice, string $group): string
