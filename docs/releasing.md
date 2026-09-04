@@ -1,40 +1,52 @@
 # Releasing Harbour
 
-Harbour releases are reconciled from the append-only `releases.json` ledger.
-The merge to `main` is the release approval boundary; the normal path uses no
-local tag, tag push, signing key, or `gh release` command.
+Harbour releases start from a version-only `release-intent.json` and are
+reconciled from the append-only `releases.json` ledger. The merge to `main` is
+the release approval boundary; the normal path uses one human PR and no local
+tag, tag push, signing key, or `gh release` command.
 
-## Normal two-PR release
+## Normal one-PR release
 
-1. In a release-content PR, move the relevant `Unreleased` entries in
-   `CHANGELOG.md` under a dated `MAJOR.MINOR.PATCH` heading. Complete the usual
-   dependency, ownership/security, fresh Laravel, and acceptance review.
-2. Merge that PR and wait for every required CI check on its exact `main`
-   commit to succeed.
-3. In a separate release-declaration PR, append one object to `releases.json`:
+1. In one release PR, move the relevant `Unreleased` entries in `CHANGELOG.md`
+   under a dated `MAJOR.MINOR.PATCH` heading and change the single version in
+   `release-intent.json`:
 
    ```json
    {
-       "version": "v0.0.4",
-       "commit": "0123456789abcdef0123456789abcdef01234567"
+       "version": "v0.0.6"
    }
    ```
 
-4. Merge the declaration PR. `Release reconciliation` creates the verified
-   annotated tag at the declared commit, creates a draft release using that
-   commit's changelog section, publishes it as immutable, and checks that
+   Complete the usual dependency, ownership/security, fresh Laravel, and
+   acceptance review. Do not edit `releases.json`.
+2. Merge that PR with a normal merge commit. The changed intent resolves to
+   that exact first-parent `main` commit, including the reviewed changelog.
+3. After `CI` succeeds on that exact commit, `Release reconciliation` checks
+   the complete required-check set again. The release App appends the resolved
+   `version -> SHA` entry to `releases.json` in a one-file control-plane commit
+   and pushes it without force. The same run then creates the verified
+   annotated tag, drafts and publishes the immutable release, and checks that
    Packagist resolves the version to the same commit.
-5. Read the workflow job summary. Every ledger entry is reported as already
+4. Read the workflow job summary. Every ledger entry is reported as already
    synchronized, tag created/release published, or failed closed.
 
-The declaration commit is control-plane metadata and is intentionally not in
-the package tag. A manifest commit cannot name its own commit ID, so do not
-introduce a self-referential placeholder or replace the exact SHA with a ref.
+The App's ledger commit contains `[skip ci]` because the package target is the
+preceding human merge commit whose full CI result authorized the append. The
+ledger commit is control-plane metadata and is intentionally not in the
+package tag. A commit cannot name its own ID, so do not add a SHA or ref to the
+human intent.
 
 ## Ledger and validation
 
+`release-intent.json` has exactly one `version` string. It must either equal the
+latest recorded ledger version (settled state) or be the next strictly greater
+version (pending state). Pull-request validation rejects a human edit to
+`releases.json`, a reverted/non-increasing intent, or an intent without an exact
+non-empty changelog section. A pending intent cannot be replaced by another
+version; wait for its ledger commit before opening the next release PR.
+
 `releases.json` has schema version `1` and one ordered `releases` array. Each
-entry has exactly two strings:
+generated entry has exactly two strings:
 
 - `version`: unique, strictly increasing `vMAJOR.MINOR.PATCH` SemVer without
   prerelease/build fields or leading zeroes;
@@ -42,18 +54,23 @@ entry has exactly two strings:
 
 The first three entries permanently record v0.0.1-v0.0.3 at their historical
 commits. Pull-request validation parses the whole file, compares it with the
-base commit, and rejects editing, reordering, or removing any existing entry.
-It also proves each target is a commit reachable from `main`, extracts a
-non-empty exact changelog section, and requires all release checks to have
-succeeded for each appended non-historical entry. It runs on `pull_request`,
-never `pull_request_target`, and receives no release credential.
+base commit, and requires it to be unchanged; only the App path may append.
+Before the App writes, validation proves the resolved target is a commit
+reachable from `main`, extracts a non-empty exact changelog section, and
+requires every release check to be successful on that target. PR validation
+runs on `pull_request`, never `pull_request_target`, and receives no release
+credential.
 
-`tools/release.php` owns validation and reconciliation. Values are schema-
-validated before reaching Git, Markdown extraction, URLs, or API paths. Git is
-invoked with argument arrays. A new signed tag is pushed with one explicit,
-non-force refspec; release writes use fixed REST operations. There is no tag-ref
-update/delete or release-delete operation in the client interfaces; the only
-release update publishes a newly created or recovered draft.
+`tools/release.php` owns planning, validation, ledger append, and
+reconciliation. Values are schema-validated before reaching Git, Markdown
+extraction, URLs, or API paths. Git is invoked with argument arrays. Both the
+ledger and a new signed tag are pushed with explicit non-force refspecs. The
+ledger publisher refuses a dirty checkout, stages only `releases.json`, and
+fails on a concurrent `main` update. The privileged job checks out the exact CI
+target rather than newer, not-yet-authorizing code. Release writes use fixed
+REST operations. There is no force push, tag-ref update/delete, or release-
+delete operation; the only release update publishes a newly created or
+recovered draft.
 
 ## Reconciliation states
 
@@ -87,7 +104,9 @@ Use a dedicated GitHub App installed only on this repository. Give the App
 repository permissions `Contents: write`, `Checks: read`, and
 `Administration: read`; grant nothing else. The workflow further narrows each
 short-lived installation token to those permissions. `Administration: read`
-is used only to confirm immutable releases before a write.
+is used only to confirm immutable releases before a write. `Contents: write`
+authorizes the one-file ledger commit and new tag ref; the tooling exposes
+neither a force push nor a ref update/delete path.
 
 GitHub's Git-tag REST endpoint does not server-sign an annotated tag created by
 an App installation token. Harbour therefore separates authorization from
@@ -114,10 +133,13 @@ deployment branches to `main`. Store:
 - environment secret `RELEASE_SIGNING_PRIVATE_KEY`, containing the dedicated
   signing-only OpenSSH private key registered to `rpickz`.
 
-Only `.github/workflows/release-reconciliation.yml` references them. The App
-private key authenticates token minting and the separate SSH key signs Git tag
-objects as the explicitly designated `rpickz` identity. The signing key is not
-the owner's everyday key and grants no authentication capability. GitHub
+Only `.github/workflows/release-reconciliation.yml` references them. Its
+unprivileged detection job reads trusted `main`; the `release` environment and
+App token are reached only for the matching successful CI commit or an explicit
+manual recovery dispatch. The App private key authenticates token minting and
+the separate SSH key signs Git tag objects as the explicitly designated
+`rpickz` identity. The signing key is not the owner's everyday key and grants
+no authentication capability. GitHub
 verifies SSH-signed tags against the registered public signing key, as described
 in its [SSH signature verification documentation](https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification).
 
@@ -171,11 +193,37 @@ The reconciler's non-force tag push is the production confirmation that the App
 receives the intended bypass. A denied create leaves no remote tag or release,
 and a rerun converges after the ruleset is fixed.
 
+## Main branch rule and one-time proof
+
+GitHub bypass applies to the whole ruleset, so keep two active `main` rulesets:
+
+1. `Protect main history`: block force pushes and deletion with no release-App
+   bypass. Retain only the separately governed owner emergency access.
+2. `Require reviewed main changes`: require a PR and the normal status checks,
+   with an always-allow bypass only for the dedicated release App. Do not grant
+   the generic GitHub Actions integration a bypass.
+
+Normal maintainers continue to require a reviewed PR and successful checks.
+The App bypasses those rules only for the generated control-plane commit; the
+tooling independently requires the complete check set on the exact package
+target before minting that commit and pushes only `HEAD:refs/heads/main`
+without force.
+
+In a disposable repository with the same branch rules, prove that a maintainer
+cannot push directly, the App can push a one-file fast-forward commit, and the
+App cannot non-fast-forward or delete `main`. Preserve that result with the tag
+ruleset proof. Test the exact production rule shape before enabling this
+workflow.
+
 ## Outages and emergency recovery
 
-For a transient GitHub or Packagist outage, rerun `Release reconciliation` with
-`workflow_dispatch`; it intentionally has no version or SHA inputs and always
-reconciles the complete ledger. Do not edit an existing entry to force a retry.
+For a transient GitHub or Packagist outage, a partial failure after the ledger
+push, or a non-fast-forward ledger conflict, rerun `Release reconciliation`
+with `workflow_dispatch`. It intentionally has no version or SHA inputs. If the
+intent is pending, it resolves the original first-parent intent commit, checks
+that commit's required CI again, and retries the append. If the entry is already
+present, it skips the append and reconciles the complete ledger. Do not edit an
+existing entry or change the intent to force a retry.
 
 Owner bypass is for investigation, not normal publication. If state disagrees
 with the ledger, preserve the tag/release and workflow evidence, disable the

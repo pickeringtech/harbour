@@ -7,6 +7,10 @@
 /package.json @rpickz @rich-picktech
 /package-lock.json @rpickz @rich-picktech
 /docs/releasing.md @rpickz @rich-picktech
+/release-intent.json @rpickz @rich-picktech
+/releases.json @rpickz @rich-picktech
+/tools/release.php @rpickz @rich-picktech
+/tools/release/ @rpickz @rich-picktech
 
 # Harbour creates and removes local resources; all source changes are
 # safety-sensitive and need explicit maintainer ownership.

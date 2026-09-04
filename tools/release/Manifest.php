@@ -86,6 +86,51 @@ final readonly class Manifest
         }
     }
 
+    public function assertSameAs(self $other): void
+    {
+        $this->assertAppendOnlyFrom($other);
+        $other->assertAppendOnlyFrom($this);
+    }
+
+    public function latest(): ?ReleaseEntry
+    {
+        return $this->entries === [] ? null : $this->entries[array_key_last($this->entries)];
+    }
+
+    public function hasVersion(string $version): bool
+    {
+        foreach ($this->entries as $entry) {
+            if ($entry->version === $version) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function withAppended(ReleaseEntry $entry): self
+    {
+        $releases = array_map(
+            static fn (ReleaseEntry $release): array => ['version' => $release->version, 'commit' => $release->commit],
+            [...$this->entries, $entry],
+        );
+
+        return self::fromJson(json_encode(['schema' => 1, 'releases' => $releases], JSON_THROW_ON_ERROR));
+    }
+
+    public function toJson(): string
+    {
+        $releases = array_map(
+            static fn (ReleaseEntry $entry): array => ['version' => $entry->version, 'commit' => $entry->commit],
+            $this->entries,
+        );
+
+        return json_encode(
+            ['schema' => 1, 'releases' => $releases],
+            JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES,
+        )."\n";
+    }
+
     /** @return list<ReleaseEntry> */
     public function entriesAddedAfter(?self $base): array
     {

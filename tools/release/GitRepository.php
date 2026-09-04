@@ -53,6 +53,13 @@ final readonly class GitRepository implements ReleaseRepository
         return $process->getExitCode() === 0 ? Manifest::fromJson($process->getOutput()) : null;
     }
 
+    public function intentAt(string $commit, string $path): ?ReleaseIntent
+    {
+        $process = $this->run(['git', 'show', "{$commit}:{$path}"], [0, 128]);
+
+        return $process->getExitCode() === 0 ? ReleaseIntent::fromJson($process->getOutput()) : null;
+    }
+
     public function mergeBase(string $left, string $right): string
     {
         foreach ([$left, $right] as $revision) {
@@ -65,6 +72,24 @@ final readonly class GitRepository implements ReleaseRepository
         $commit = trim($process->getOutput());
         if (preg_match('/^[0-9a-f]{40}$/D', $commit) !== 1) {
             throw new ReleaseException('Git returned an invalid merge-base commit.');
+        }
+
+        return $commit;
+    }
+
+    public function latestFirstParentChange(string $revision, string $path): string
+    {
+        if (preg_match('/^[A-Za-z0-9._\/-]+$/D', $revision) !== 1) {
+            throw new ReleaseException('Release history revision contains invalid characters.');
+        }
+        if (preg_match('/^[A-Za-z0-9._\/-]+$/D', $path) !== 1 || str_contains($path, '..')) {
+            throw new ReleaseException("Repository path [{$path}] is invalid.");
+        }
+
+        $process = $this->run(['git', 'rev-list', '--first-parent', '--max-count=1', $revision, '--', $path], [0]);
+        $commit = trim($process->getOutput());
+        if (preg_match('/^[0-9a-f]{40}$/D', $commit) !== 1) {
+            throw new ReleaseException("Could not resolve the main commit that changed {$path}.");
         }
 
         return $commit;

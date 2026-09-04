@@ -4,10 +4,16 @@ Status: accepted
 
 Harbour's desired release state is an append-only `releases.json` ledger. A
 release declaration names a strict SemVer tag and the full object ID of an
-already-existing commit reachable from `main`. Release content and its
-declaration therefore use two pull requests. The declaration commit is control-
-plane metadata, not package content, avoiding an impossible self-referential
-commit ID and ensuring CI has already completed on the exact package tree.
+already-existing commit reachable from `main`.
+
+Release preparation uses one human PR containing the changelog section and a
+version-only `release-intent.json`. The exact target is the first-parent `main`
+commit that changed that intent. After full CI succeeds on that commit, the
+release App appends the resolved version and 40-character SHA in a one-file,
+non-force control-plane commit. This avoids an impossible self-reference while
+keeping the package target, human approval, and exact successful CI result
+identical. A concurrent branch update rejects the push; retry resolution is
+idempotent and retains the original intent-change target.
 
 Existing ledger entries and remote tags are compare-only. Validation forbids
 editing, reordering, or removing an entry. Reconciliation may create a missing
@@ -18,7 +24,9 @@ evidence and makes retries converge after partial failure without rewriting
 history.
 
 A dedicated GitHub App supplies a short-lived, repository-scoped token and is
-the only normal identity allowed to push a new release-tag ref. GitHub does not
+the only normal identity allowed to append the ledger directly to `main` or
+push a new release-tag ref. Both use explicit non-force refspecs; branch and tag
+rules prohibit history rewrites and deletion. GitHub does not
 server-sign annotated tags created through the Git-tag REST endpoint for an App
 installation token, so authentication and signing credentials are deliberately
 separate. `rpickz` is explicitly designated as the account-bound signature

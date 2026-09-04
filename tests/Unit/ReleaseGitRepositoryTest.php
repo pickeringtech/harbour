@@ -24,7 +24,8 @@ final class ReleaseGitRepositoryTest extends TestCase
         $this->git(['config', 'user.email', 'harbour@example.test']);
         file_put_contents($this->directory.'/CHANGELOG.md', "## [1.0.0] - 2026-09-04\n\n- Notes.\n");
         file_put_contents($this->directory.'/releases.json', '{"schema":1,"releases":[]}');
-        $this->git(['add', 'CHANGELOG.md', 'releases.json']);
+        file_put_contents($this->directory.'/release-intent.json', '{"version":"v1.0.0"}');
+        $this->git(['add', 'CHANGELOG.md', 'release-intent.json', 'releases.json']);
         $this->git(['commit', '-m', 'main']);
         $this->mainCommit = trim($this->git(['rev-parse', 'HEAD']));
     }
@@ -43,10 +44,13 @@ final class ReleaseGitRepositoryTest extends TestCase
 
         self::assertStringContainsString('- Notes.', $repository->fileAt($this->mainCommit, 'CHANGELOG.md'));
         self::assertSame($this->mainCommit, $repository->mergeBase('HEAD', $this->mainCommit));
+        self::assertSame($this->mainCommit, $repository->latestFirstParentChange('main', 'release-intent.json'));
         $manifest = $repository->manifestAt($this->mainCommit, 'releases.json');
         self::assertNotNull($manifest);
         self::assertCount(0, $manifest->entries);
         self::assertNull($repository->manifestAt($this->mainCommit, 'missing.json'));
+        self::assertSame('v1.0.0', $repository->intentAt($this->mainCommit, 'release-intent.json')?->version);
+        self::assertNull($repository->intentAt($this->mainCommit, 'missing.json'));
     }
 
     public function test_it_rejects_missing_non_commit_and_unreachable_objects(): void
@@ -72,6 +76,25 @@ final class ReleaseGitRepositoryTest extends TestCase
         $this->expectException(ReleaseException::class);
         $this->expectExceptionMessage('not reachable');
         $repository->assertReachableFrom($sideCommit, 'main');
+    }
+
+    public function test_it_resolves_the_merge_commit_that_changed_intent_despite_later_main_commits(): void
+    {
+        $this->git(['switch', '-c', 'release']);
+        file_put_contents($this->directory.'/release-intent.json', "{\n    \"version\": \"v1.1.0\"\n}\n");
+        $this->git(['add', 'release-intent.json']);
+        $this->git(['commit', '-m', 'release intent']);
+        $this->git(['switch', 'main']);
+        $this->git(['merge', '--no-ff', 'release', '-m', 'merge release']);
+        $releaseMerge = trim($this->git(['rev-parse', 'HEAD']));
+        file_put_contents($this->directory.'/unrelated.txt', "later\n");
+        $this->git(['add', 'unrelated.txt']);
+        $this->git(['commit', '-m', 'later main change']);
+
+        self::assertSame(
+            $releaseMerge,
+            (new GitRepository($this->directory))->latestFirstParentChange('main', 'release-intent.json'),
+        );
     }
 
     /** @param list<string> $arguments */

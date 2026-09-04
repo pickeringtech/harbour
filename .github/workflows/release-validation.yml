@@ -8,6 +8,7 @@ on:
       - 'composer.json'
       - 'composer.lock'
       - 'docs/releasing.md'
+      - 'release-intent.json'
       - 'releases.json'
       - 'tools/release.php'
       - 'tools/release/**'
@@ -21,7 +22,7 @@ concurrency:
 
 jobs:
   validate:
-    name: Append-only release ledger
+    name: Release intent and append-only ledger
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -37,10 +38,9 @@ jobs:
           php-version: '8.4'
           coverage: none
       - uses: ramsey/composer-install@65e4f84970763564f46a70b8a54b90d033b3bdda # 4.0.0
-      - name: Validate release ledger
+      - name: Validate release intent and ledger
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_TOKEN: ${{ github.token }}
           RELEASE_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          RELEASE_MAIN_REF: ${{ github.event.pull_request.base.sha }}
-        run: php tools/release.php validate
+        run: php tools/release.php validate-pr
