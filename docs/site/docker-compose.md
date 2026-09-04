@@ -41,9 +41,15 @@ merely started. MongoDB uses the lightweight official `mongo` image and is
 connection-only at the database level: Harbour owns the optional container,
 not the MongoDB database inside it.
 
-Harbour does not overwrite an existing `docker-compose.harbour.yml`. If that
-file already exists, it remains project-owned and the installer reports it as
-unchanged.
+Harbour does not overwrite an existing `docker-compose.harbour.yml` by default.
+`workspace:install --reconfigure` may replace it only when its Harbour-generated
+marker is present; an unmarked project file remains untouched.
+
+The service list, aliases, images, port/`FORWARD_*` metadata, environments,
+volumes, and healthchecks come from one structured installation-service
+specification. Discovery's YAML support is deliberately limited to the
+top-level Sail/Herd service-name and Herd-port subset; it is not a general YAML
+extension mechanism.
 
 ## Supply a project-specific stack
 

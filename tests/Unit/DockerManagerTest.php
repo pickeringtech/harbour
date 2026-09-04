@@ -12,6 +12,7 @@ use PickeringTech\Harbour\Exceptions\HarbourException;
 use PickeringTech\Harbour\Identity\ContextIdentifier;
 use PickeringTech\Harbour\Identity\WorkspaceIdentity;
 use PickeringTech\Harbour\Process\ProcessResult;
+use PickeringTech\Harbour\State\ResourceType;
 
 final class DockerManagerTest extends TestCase
 {
@@ -38,7 +39,7 @@ final class DockerManagerTest extends TestCase
 
         self::assertMatchesRegularExpression('/\Adocker_[a-f0-9]{32}\z/', $resource->id);
         self::assertSame('ws_test', $resource->workspaceId);
-        self::assertSame('docker_container', $resource->type);
+        self::assertSame(ResourceType::DockerContainer, $resource->type);
         self::assertSame('docker', $resource->driver);
         self::assertSame([
             'service' => 'search',
@@ -110,7 +111,11 @@ final class FakeCommandRunner implements CommandRunner
     /** @var array<string, string> */
     public array $labels = [];
 
-    public function run(array $command, string $workingDirectory, array $environment = []): ProcessResult
+    /**
+     * @param  list<string>  $command
+     * @param  array<string, string>  $environment
+     */
+    public function run(array $command, string $workingDirectory, array $environment = [], ?callable $output = null): ProcessResult
     {
         $this->commands[] = $command;
 

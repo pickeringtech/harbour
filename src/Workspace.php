@@ -6,6 +6,7 @@ namespace PickeringTech\Harbour;
 
 use PickeringTech\Harbour\Identity\WorkspaceIdentity;
 use PickeringTech\Harbour\State\OwnedResource;
+use PickeringTech\Harbour\State\ResourceType;
 use PickeringTech\Harbour\State\WorkspaceState;
 use PickeringTech\Harbour\Variables\VariableBag;
 
@@ -34,13 +35,7 @@ final readonly class Workspace
 
     public function database(): ?OwnedResource
     {
-        foreach ($this->state->resources as $resource) {
-            if ($resource->type === 'database') {
-                return $resource;
-            }
-        }
-
-        return null;
+        return $this->state->resource(ResourceType::Database);
     }
 
     public function state(): WorkspaceState

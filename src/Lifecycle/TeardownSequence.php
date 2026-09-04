@@ -10,7 +10,9 @@ use PickeringTech\Harbour\Contracts\WorkspaceStateRepository;
 use PickeringTech\Harbour\Environment\EnvironmentManager;
 use PickeringTech\Harbour\Events\WorkspaceTearingDown;
 use PickeringTech\Harbour\Events\WorkspaceTornDown;
+use PickeringTech\Harbour\Hooks\LifecycleHookRunner;
 use PickeringTech\Harbour\Ports\PortAllocation;
+use PickeringTech\Harbour\State\ResourceType;
 use PickeringTech\Harbour\Workspace;
 
 final readonly class TeardownSequence
@@ -23,7 +25,7 @@ final readonly class TeardownSequence
         private VariablePipeline $variables,
         private ManagedInfrastructure $infrastructure,
         private DatabaseLifecycle $database,
-        private LifecycleHooks $hooks,
+        private LifecycleHookRunner $hooks,
     ) {}
 
     public function run(bool $force): void
@@ -49,10 +51,10 @@ final readonly class TeardownSequence
 
         foreach (array_reverse($state->resources) as $resource) {
             match ($resource->type) {
-                'compose_project' => $this->infrastructure->destroyCompose($resource, $workspace->variables()),
-                'docker_container' => $this->infrastructure->destroyDocker($resource),
-                'database' => $this->database->destroy($resource, $state),
-                default => null,
+                ResourceType::ComposeProject => $this->infrastructure->destroyCompose($resource, $workspace->variables()),
+                ResourceType::DockerContainer => $this->infrastructure->destroyDocker($resource),
+                ResourceType::Database => $this->database->destroy($resource, $state),
+                ResourceType::Unknown => null,
             };
         }
 

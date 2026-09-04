@@ -9,6 +9,7 @@ use PickeringTech\Harbour\Exceptions\ErrorCode;
 use PickeringTech\Harbour\Exceptions\HarbourException;
 use PickeringTech\Harbour\Identity\WorkspaceIdentity;
 use PickeringTech\Harbour\State\OwnedResource;
+use PickeringTech\Harbour\State\ResourceType;
 
 final readonly class DatabaseManager
 {
@@ -17,7 +18,7 @@ final readonly class DatabaseManager
 
     public function prepare(WorkspaceIdentity $workspace, DatabaseConfiguration $configuration, string $database): OwnedResource
     {
-        return new OwnedResource('db_'.bin2hex(random_bytes(16)), $workspace->id(), 'database', $configuration->driver, [
+        return new OwnedResource('db_'.bin2hex(random_bytes(16)), $workspace->id(), ResourceType::Database, $configuration->driver, [
             'database' => $database,
             'connection_fingerprint' => $configuration->fingerprint(),
             'ownership_token' => bin2hex(random_bytes(32)),
@@ -29,19 +30,7 @@ final readonly class DatabaseManager
     {
         $created = $this->driver($resource->driver)->create($resource, $workspacePath, $configuration);
 
-        return new OwnedResource(
-            $created->id,
-            $created->workspaceId,
-            $created->type,
-            $created->driver,
-            [...$created->metadata, 'creation_pending' => false],
-            $created->createdByHarbour,
-        );
-    }
-
-    public function creationPending(OwnedResource $resource): bool
-    {
-        return ($resource->metadata['creation_pending'] ?? false) === true;
+        return $created->created();
     }
 
     public function exists(OwnedResource $resource, DatabaseConfiguration $configuration): bool

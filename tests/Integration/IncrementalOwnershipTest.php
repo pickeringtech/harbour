@@ -8,6 +8,7 @@ use Illuminate\Contracts\Config\Repository;
 use PickeringTech\Harbour\Contracts\CommandRunner;
 use PickeringTech\Harbour\Exceptions\HarbourException;
 use PickeringTech\Harbour\Process\ProcessResult;
+use PickeringTech\Harbour\State\ResourceType;
 use PickeringTech\Harbour\Tests\TestCase;
 use PickeringTech\Harbour\WorkspaceManager;
 
@@ -32,7 +33,7 @@ final class IncrementalOwnershipTest extends TestCase
         $workspace = $manager->current();
         self::assertNotNull($workspace);
         self::assertSame('failed', $workspace->state()->status);
-        self::assertSame('compose_project', $workspace->state()->resources[0]->type);
+        self::assertSame(ResourceType::ComposeProject, $workspace->state()->resources[0]->type);
         $snapshot = $workspace->state()->resources[0]->metadata['file'] ?? null;
         self::assertIsString($snapshot);
         self::assertFileExists($snapshot);
@@ -48,7 +49,11 @@ final class FailingThenSuccessfulRunner implements CommandRunner
 {
     public bool $fail = true;
 
-    public function run(array $command, string $workingDirectory, array $environment = []): ProcessResult
+    /**
+     * @param  list<string>  $command
+     * @param  array<string, string>  $environment
+     */
+    public function run(array $command, string $workingDirectory, array $environment = [], ?callable $output = null): ProcessResult
     {
         return $this->fail ? new ProcessResult(17, '', 'injected failure') : new ProcessResult(0, '');
     }

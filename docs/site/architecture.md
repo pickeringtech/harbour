@@ -5,6 +5,9 @@ Harbour's Artisan commands adapt input and output around an injectable
 and `TeardownSequence` own orchestration, with dedicated variable, database,
 and managed-infrastructure collaborators. Orchestration remains outside the
 console layer.
+Harbour configuration is validated once into a typed value object, and each
+lifecycle collaborator is registered in Laravel's container rather than
+constructed inline by the manager.
 
 ![Harbour component boundaries](/images/architecture/components.svg)
 
@@ -27,6 +30,10 @@ in reverse order and converges safely on `absent`.
 - Database, Docker, and Compose adapters create and destroy owned resources.
 - Environment management preserves and restores the checkout's original `.env`.
 - Setup and teardown sequences encode the documented ordering without coupling it to console commands.
+- A structured installation-service specification projects into TUI choices,
+  detection aliases/ports, environment metadata, and readable Compose output.
+- Owned-resource types are exhaustive enums, and lifecycle hooks execute
+  through the same injectable command runner as Docker and Compose.
 
 ## Architectural decisions
 

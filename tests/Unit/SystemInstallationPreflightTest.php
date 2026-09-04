@@ -181,7 +181,7 @@ final readonly class PreflightCommandRunner implements CommandRunner
         private bool $composeAvailable = true,
     ) {}
 
-    public function run(array $command, string $workingDirectory, array $environment = []): ProcessResult
+    public function run(array $command, string $workingDirectory, array $environment = [], ?callable $output = null): ProcessResult
     {
         $available = $command === ['docker', '--version'] ? $this->dockerAvailable : $this->composeAvailable;
 

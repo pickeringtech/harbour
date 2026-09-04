@@ -4,25 +4,12 @@ declare(strict_types=1);
 
 namespace PickeringTech\Harbour;
 
-use Illuminate\Contracts\Config\Repository as ConfigRepository;
-use Illuminate\Contracts\Container\Container;
-use Illuminate\Contracts\Events\Dispatcher;
-use PickeringTech\Harbour\Contracts\PortAllocationStrategy;
-use PickeringTech\Harbour\Contracts\WorkspaceIdentityStrategy;
 use PickeringTech\Harbour\Contracts\WorkspaceStateRepository;
-use PickeringTech\Harbour\Database\DatabaseManager;
-use PickeringTech\Harbour\Docker\ComposeManager;
-use PickeringTech\Harbour\Docker\DockerManager;
-use PickeringTech\Harbour\Environment\EnvironmentFile;
 use PickeringTech\Harbour\Environment\EnvironmentManager;
 use PickeringTech\Harbour\Environment\EnvironmentTemplate;
 use PickeringTech\Harbour\Exceptions\ErrorCode;
 use PickeringTech\Harbour\Exceptions\HarbourException;
-use PickeringTech\Harbour\Hooks\LifecycleHookRunner;
-use PickeringTech\Harbour\Identity\ContextIdentifier;
 use PickeringTech\Harbour\Lifecycle\DatabaseLifecycle;
-use PickeringTech\Harbour\Lifecycle\LifecycleHooks;
-use PickeringTech\Harbour\Lifecycle\ManagedInfrastructure;
 use PickeringTech\Harbour\Lifecycle\SetupSequence;
 use PickeringTech\Harbour\Lifecycle\TeardownSequence;
 use PickeringTech\Harbour\Lifecycle\VariablePipeline;
@@ -30,99 +17,46 @@ use PickeringTech\Harbour\Support\LifecycleLock;
 
 final readonly class WorkspaceManager
 {
-    private VariablePipeline $variables;
-
-    private DatabaseLifecycle $database;
-
-    private SetupSequence $setupSequence;
-
-    private TeardownSequence $teardownSequence;
-
     public function __construct(
         private string $workspacePath,
-        private ConfigRepository $config,
-        Container $container,
-        Dispatcher $events,
-        WorkspaceIdentityStrategy $identityStrategy,
-        PortAllocationStrategy $portStrategy,
+        private HarbourConfig $config,
         private WorkspaceStateRepository $states,
         private EnvironmentManager $environment,
         private EnvironmentTemplate $templates,
-        EnvironmentFile $environmentFile,
-        ContextIdentifier $identifiers,
-        DatabaseManager $databases,
-        DockerManager $docker,
-        ComposeManager $compose,
-        LifecycleHookRunner $hooks,
+        private VariablePipeline $variables,
+        private DatabaseLifecycle $database,
+        private SetupSequence $setupSequence,
+        private TeardownSequence $teardownSequence,
         private LifecycleLock $lock,
-    ) {
-        $this->variables = new VariablePipeline(
-            $workspacePath,
-            $config,
-            $container,
-            $templates,
-            $environmentFile,
-            $identifiers,
-        );
-        $lifecycleHooks = new LifecycleHooks($workspacePath, $config, $hooks);
-        $infrastructure = new ManagedInfrastructure($workspacePath, $config, $states, $docker, $compose);
-        $this->database = new DatabaseLifecycle(
-            $workspacePath,
-            $config,
-            $states,
-            $environmentFile,
-            $identifiers,
-            $databases,
-            $this->variables,
-        );
-        $this->setupSequence = new SetupSequence(
-            $workspacePath,
-            $config,
-            $container,
-            $events,
-            $identityStrategy,
-            $portStrategy,
-            $states,
-            $environment,
-            $templates,
-            $this->variables,
-            $infrastructure,
-            $this->database,
-            $lifecycleHooks,
-        );
-        $this->teardownSequence = new TeardownSequence(
-            $events,
-            $portStrategy,
-            $states,
-            $environment,
-            $this->variables,
-            $infrastructure,
-            $this->database,
-            $lifecycleHooks,
-        );
-    }
+    ) {}
 
-    public function setup(bool $fresh = false): Workspace
+    /** @param null|callable(string, string): void $output */
+    public function setup(bool $fresh = false, bool $force = false, bool $seed = false, ?callable $output = null): Workspace
     {
         $this->assertEnabled();
 
-        return $this->lock->synchronized(function () use ($fresh): Workspace {
+        return $this->lock->synchronized(function () use ($fresh, $force, $seed, $output): Workspace {
+            $this->variables->beginOperation();
             if ($fresh && $this->states->load() !== null) {
                 $this->teardownSequence->run(true);
             }
 
-            return $this->setupSequence->run();
+            return $this->setupSequence->run($force, $seed, $output);
         });
     }
 
     public function teardown(bool $force = false): void
     {
         $this->assertEnabled();
-        $this->lock->synchronized(fn () => $this->teardownSequence->run($force));
+        $this->lock->synchronized(function () use ($force): void {
+            $this->variables->beginOperation();
+            $this->teardownSequence->run($force);
+        });
     }
 
     public function current(): ?Workspace
     {
+        $this->variables->beginOperation();
         $state = $this->states->load();
         if ($state === null) {
             return null;
@@ -148,13 +82,16 @@ final readonly class WorkspaceManager
         ];
     }
 
-    public function render(): Workspace
+    public function render(bool $force = false): Workspace
     {
-        return $this->lock->synchronized(function (): Workspace {
+        return $this->lock->synchronized(function () use ($force): Workspace {
+            $this->variables->beginOperation();
             $state = $this->states->load();
             if ($state === null) {
                 throw new HarbourException(ErrorCode::UnsafeOperation, 'Run workspace:setup before rendering the environment.');
             }
+
+            $this->environment->assertRenderable($state, $force);
 
             $recordedDatabase = $this->database->resource($state)?->metadata['database'] ?? null;
             $variables = $this->variables->resolve($state, is_string($recordedDatabase) ? $recordedDatabase : null, true);
@@ -168,7 +105,7 @@ final readonly class WorkspaceManager
 
     private function assertEnabled(): void
     {
-        if (! (bool) $this->config->get('harbour.enabled', false)) {
+        if (! $this->config->enabled) {
             throw new HarbourException(ErrorCode::UnsafeOperation, 'Harbour is disabled. Set HARBOUR_ENABLED=true for an intentional local or CI run.');
         }
     }

@@ -14,13 +14,20 @@ use PickeringTech\Harbour\Environment\EnvironmentManager;
 use PickeringTech\Harbour\Exceptions\ErrorCode;
 use PickeringTech\Harbour\Exceptions\HarbourException;
 use PickeringTech\Harbour\Facades\Harbour;
+use PickeringTech\Harbour\HarbourConfig;
 use PickeringTech\Harbour\HarbourServiceProvider;
+use PickeringTech\Harbour\Hooks\LifecycleHookRunner;
+use PickeringTech\Harbour\Lifecycle\DatabaseLifecycle;
+use PickeringTech\Harbour\Lifecycle\ManagedInfrastructure;
+use PickeringTech\Harbour\Lifecycle\SetupSequence;
+use PickeringTech\Harbour\Lifecycle\TeardownSequence;
+use PickeringTech\Harbour\Lifecycle\VariablePipeline;
 use PickeringTech\Harbour\Ports\FilePortRegistry;
 use PickeringTech\Harbour\Tests\TestCase;
 use PickeringTech\Harbour\WorkspaceManager;
 use stdClass;
 
-final class ServiceProviderCoverageTest extends TestCase
+final class LifecycleContainerIntegrationTest extends TestCase
 {
     #[DataProvider('invalidBindings')]
     public function test_invalid_strategy_and_state_bindings_are_rejected(string $binding, string $configKey, mixed $value): void
@@ -93,6 +100,25 @@ final class ServiceProviderCoverageTest extends TestCase
 
         self::assertSame(1, $status['version']);
         self::assertSame('absent', $status['workspace']['status']);
+    }
+
+    public function test_container_constructs_the_registered_typed_lifecycle_graph(): void
+    {
+        foreach ([HarbourConfig::class, VariablePipeline::class, DatabaseLifecycle::class, ManagedInfrastructure::class, SetupSequence::class, TeardownSequence::class, LifecycleHookRunner::class, WorkspaceManager::class] as $binding) {
+            self::assertInstanceOf($binding, $this->application()->make($binding));
+        }
+    }
+
+    public function test_variable_pipeline_caches_the_template_for_one_operation(): void
+    {
+        $pipeline = $this->application()->make(VariablePipeline::class);
+        $pipeline->beginOperation();
+        $first = $pipeline->templateContents();
+        file_put_contents($this->workspaceDirectory.'/.env.harbour', "CHANGED=true\n");
+
+        self::assertSame($first, $pipeline->templateContents());
+        $pipeline->beginOperation();
+        self::assertSame("CHANGED=true\n", $pipeline->templateContents());
     }
 
     public function test_vite_uses_its_workspace_local_default_and_honours_an_explicit_hot_file(): void

@@ -7,6 +7,7 @@ namespace PickeringTech\Harbour\Database;
 use PickeringTech\Harbour\Exceptions\ErrorCode;
 use PickeringTech\Harbour\Exceptions\HarbourException;
 use PickeringTech\Harbour\State\OwnedResource;
+use PickeringTech\Harbour\State\ResourceType;
 
 final readonly class OwnedDatabaseEvidence
 {
@@ -23,7 +24,7 @@ final readonly class OwnedDatabaseEvidence
         $metadata = $resource->metadata;
 
         if (! $resource->createdByHarbour
-            || $resource->type !== 'database'
+            || $resource->type !== ResourceType::Database
             || ! is_string($metadata['ownership_token'] ?? null)
             || $metadata['ownership_token'] === ''
             || ! is_string($metadata['database'] ?? null)

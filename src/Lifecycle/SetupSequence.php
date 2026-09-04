@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace PickeringTech\Harbour\Lifecycle;
 
-use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Contracts\Console\Kernel as ConsoleKernel;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Events\Dispatcher;
@@ -17,6 +16,8 @@ use PickeringTech\Harbour\Events\WorkspaceSettingUp;
 use PickeringTech\Harbour\Events\WorkspaceSetup;
 use PickeringTech\Harbour\Exceptions\ErrorCode;
 use PickeringTech\Harbour\Exceptions\HarbourException;
+use PickeringTech\Harbour\HarbourConfig;
+use PickeringTech\Harbour\Hooks\LifecycleHookRunner;
 use PickeringTech\Harbour\Identity\WorkspaceContext;
 use PickeringTech\Harbour\Ports\PortRequirement;
 use PickeringTech\Harbour\State\WorkspaceState;
@@ -27,7 +28,7 @@ final readonly class SetupSequence
 {
     public function __construct(
         private string $workspacePath,
-        private ConfigRepository $config,
+        private HarbourConfig $config,
         private Container $container,
         private Dispatcher $events,
         private WorkspaceIdentityStrategy $identityStrategy,
@@ -38,12 +39,17 @@ final readonly class SetupSequence
         private VariablePipeline $variables,
         private ManagedInfrastructure $infrastructure,
         private DatabaseLifecycle $database,
-        private LifecycleHooks $hooks,
+        private LifecycleHookRunner $hooks,
     ) {}
 
-    public function run(): Workspace
+    /** @param null|callable(string, string): void $output */
+    public function run(bool $force = false, bool $seed = false, ?callable $output = null): Workspace
     {
         $state = $this->states->load();
+        $wasReady = $state?->status === 'ready';
+        if ($state !== null) {
+            $this->environment->assertRenderable($state, $force);
+        }
         $identity = $state !== null
             ? $state->identity
             : $this->identityStrategy->resolve(new WorkspaceContext($this->workspacePath, $this->variables->projectName()));
@@ -72,7 +78,7 @@ final readonly class SetupSequence
             // logical databases or runs Laravel migrations against it.
             $state = $this->infrastructure->setupDocker($state);
             $infrastructureVariables = $this->variables->resolve($state, null, true);
-            $state = $this->infrastructure->setupCompose($state, $infrastructureVariables);
+            $state = $this->infrastructure->setupCompose($state, $infrastructureVariables, $output);
 
             [$state, $databaseName] = $this->database->setup($state);
 
@@ -83,7 +89,7 @@ final readonly class SetupSequence
             $state = $this->environment->render($state, $rendered);
             $this->states->save($state);
 
-            $this->migrateAndSeed();
+            $this->migrateAndSeed(! $wasReady || $seed);
             $this->hooks->run('after_setup', $resolved);
 
             $state = $state->ready();
@@ -107,33 +113,21 @@ final readonly class SetupSequence
     private function portRequirements(): array
     {
         $requirements = [];
-        $allocations = $this->config->get('harbour.ports.allocations', []);
-
-        if (! is_array($allocations)) {
-            throw new HarbourException(ErrorCode::InvalidConfiguration, 'Port allocations must be an array.');
-        }
+        $allocations = $this->config->portAllocations;
 
         foreach ($allocations as $name => $definition) {
-            if (! is_string($name) || ! is_array($definition) || ! is_array($definition['range'] ?? null) || count($definition['range']) !== 2) {
-                throw new HarbourException(ErrorCode::InvalidConfiguration, 'Each port allocation requires a two-value range.');
-            }
-            [$minimum, $maximum] = $this->portRange($definition['range']);
+            [$minimum, $maximum] = $definition['range'];
             $requirements[] = new PortRequirement($name, $minimum, $maximum);
         }
 
-        foreach ([$this->config->get('harbour.services', []), $this->config->get('harbour.compose', [])] as $services) {
-            if (! is_array($services)) {
-                continue;
-            }
+        foreach ([$this->config->services, $this->config->compose] as $services) {
             foreach ($services as $service) {
-                if (! is_array($service) || ! is_array($service['ports'] ?? null)) {
+                if (! isset($service['ports']) || ! is_array($service['ports'])) {
                     continue;
                 }
                 foreach ($service['ports'] as $name => $definition) {
-                    if (! is_string($name) || ! is_array($definition) || ! is_array($definition['range'] ?? null) || count($definition['range']) !== 2) {
-                        throw new HarbourException(ErrorCode::InvalidConfiguration, 'Service ports require a named two-value range.');
-                    }
-                    [$minimum, $maximum] = $this->portRange($definition['range']);
+                    /** @var array{range: array{int, int}} $definition */
+                    [$minimum, $maximum] = $definition['range'];
                     $requirements[] = new PortRequirement($name, $minimum, $maximum);
                 }
             }
@@ -147,40 +141,24 @@ final readonly class SetupSequence
         return array_values($unique);
     }
 
-    private function migrateAndSeed(): void
+    private function migrateAndSeed(bool $shouldSeed): void
     {
-        if (! (bool) $this->config->get('harbour.database.enabled', true)) {
+        if (! $this->config->databaseEnabled) {
             return;
         }
 
         $kernel = $this->container->make(ConsoleKernel::class);
-        if ((bool) $this->config->get('harbour.database.migrate', true)) {
+        if ($this->config->databaseMigrate) {
             $exit = $kernel->call('migrate', ['--force' => true]);
             if ($exit !== 0) {
                 throw new HarbourException(ErrorCode::ProcessFailed, 'Laravel migrations failed.', ['exit_code' => $exit]);
             }
         }
-        if ((bool) $this->config->get('harbour.database.seed', false)) {
+        if ($shouldSeed && $this->config->databaseSeed) {
             $exit = $kernel->call('db:seed', ['--force' => true]);
             if ($exit !== 0) {
                 throw new HarbourException(ErrorCode::ProcessFailed, 'Laravel database seeding failed.', ['exit_code' => $exit]);
             }
         }
-    }
-
-    /**
-     * @param  array<mixed>  $range
-     * @return array{int, int}
-     */
-    private function portRange(array $range): array
-    {
-        $minimum = $range[0] ?? null;
-        $maximum = $range[1] ?? null;
-        if ((! is_int($minimum) && ! (is_string($minimum) && ctype_digit($minimum)))
-            || (! is_int($maximum) && ! (is_string($maximum) && ctype_digit($maximum)))) {
-            throw new HarbourException(ErrorCode::InvalidConfiguration, 'Port range bounds must be integers.');
-        }
-
-        return [(int) $minimum, (int) $maximum];
     }
 }

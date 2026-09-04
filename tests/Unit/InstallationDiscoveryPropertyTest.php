@@ -9,6 +9,7 @@ use Eris\TestTrait;
 use PHPUnit\Framework\TestCase;
 use PickeringTech\Harbour\Installation\InstallationFileRenderer;
 use PickeringTech\Harbour\Installation\InstallationSelection;
+use PickeringTech\Harbour\Installation\InstallationServiceCatalog;
 use PickeringTech\Harbour\Installation\ProjectConfigurationDetector;
 
 final class InstallationDiscoveryPropertyTest extends TestCase
@@ -24,11 +25,11 @@ final class InstallationDiscoveryPropertyTest extends TestCase
                 file_put_contents($workspace.'/compose.yaml', $yaml);
                 $selection = (new ProjectConfigurationDetector($workspace))->discover()->selection;
 
-                self::assertContains($selection->database, InstallationSelection::DATABASES);
-                self::assertContains($selection->cache, InstallationSelection::CACHES);
-                self::assertContains($selection->mail, InstallationSelection::MAILERS);
+                self::assertContains($selection->database, InstallationSelection::databases());
+                self::assertContains($selection->cache, InstallationSelection::caches());
+                self::assertContains($selection->mail, InstallationSelection::mailers());
                 foreach ($selection->services() as $service) {
-                    self::assertContains($service, InstallationSelection::SAIL_SERVICES);
+                    self::assertContains($service, (new InstallationServiceCatalog)->names());
                 }
             } finally {
                 $this->removeDirectory($workspace);

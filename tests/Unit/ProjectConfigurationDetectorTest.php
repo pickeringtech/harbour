@@ -180,6 +180,28 @@ final class ProjectConfigurationDetectorTest extends TestCase
         self::assertSame(6379, $discovery->port('redis', 6379));
     }
 
+    public function test_standard_laravel_connection_selectors_do_not_imply_optional_services(): void
+    {
+        file_put_contents($this->workspace.'/.env.example', <<<'ENV'
+        DB_CONNECTION=sqlite
+        CACHE_STORE=database
+        SESSION_DRIVER=database
+        QUEUE_CONNECTION=database
+        MAIL_MAILER=log
+        BROADCAST_CONNECTION=log
+        ENV);
+
+        $discovery = $this->detector()->discover();
+
+        self::assertTrue($discovery->detected);
+        self::assertSame('sqlite', $discovery->selection->database);
+        self::assertSame('database', $discovery->selection->cache);
+        self::assertSame('log', $discovery->selection->mail);
+        self::assertSame([], $discovery->selection->additionalServices);
+        self::assertNotContains('rabbitmq', $discovery->selection->services());
+        self::assertNotContains('soketi', $discovery->selection->services());
+    }
+
     public function test_it_skips_irrelevant_compose_files_and_marks_a_generic_compose_source(): void
     {
         file_put_contents($this->workspace.'/compose.yaml', "services:\n  web:\n    image: nginx\n");

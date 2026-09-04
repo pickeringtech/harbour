@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace PickeringTech\Harbour\Lifecycle;
 
-use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use PickeringTech\Harbour\Contracts\WorkspaceStateRepository;
 use PickeringTech\Harbour\Docker\ComposeManager;
 use PickeringTech\Harbour\Docker\DockerManager;
 use PickeringTech\Harbour\Exceptions\ErrorCode;
 use PickeringTech\Harbour\Exceptions\HarbourException;
+use PickeringTech\Harbour\HarbourConfig;
 use PickeringTech\Harbour\State\OwnedResource;
+use PickeringTech\Harbour\State\ResourceType;
 use PickeringTech\Harbour\State\WorkspaceState;
 use PickeringTech\Harbour\Variables\VariableBag;
 
@@ -18,7 +19,7 @@ final readonly class ManagedInfrastructure
 {
     public function __construct(
         private string $workspacePath,
-        private ConfigRepository $config,
+        private HarbourConfig $config,
         private WorkspaceStateRepository $states,
         private DockerManager $docker,
         private ComposeManager $compose,
@@ -26,29 +27,26 @@ final readonly class ManagedInfrastructure
 
     public function setupDocker(WorkspaceState $state): WorkspaceState
     {
-        $services = $this->config->get('harbour.services', []);
-        if (! is_array($services)) {
-            throw new HarbourException(ErrorCode::InvalidConfiguration, 'Harbour services must be an array.');
-        }
+        $services = $this->config->services;
 
         foreach ($services as $name => $configuration) {
-            if (! is_string($name) || ! is_array($configuration) || ($configuration['driver'] ?? 'shared') !== 'docker') {
+            if (($configuration['driver'] ?? 'shared') !== 'docker') {
                 continue;
             }
-            $resource = $this->serviceResource($state, 'docker_container', $name);
+            $resource = $this->serviceResource($state, ResourceType::DockerContainer, $name);
             if ($resource === null) {
                 $resource = $this->docker->prepare($state->identity, $name);
                 $state = $state->withResource($resource);
                 $this->states->save($state);
-                $resource = $this->docker->create($resource, $this->workspacePath, $this->stringKeyedArray($configuration), $state->allocations);
+                $resource = $this->docker->create($resource, $this->workspacePath, $configuration, $state->allocations);
                 $state = $state->withResource($resource);
                 $this->states->save($state);
-            } elseif ($this->docker->creationPending($resource)) {
+            } elseif ($resource->creationPending()) {
                 if ($this->docker->exists($resource, $this->workspacePath)) {
                     $this->docker->assertOwned($resource, $this->workspacePath);
                     $resource = $this->docker->confirmCreated($resource);
                 } else {
-                    $resource = $this->docker->create($resource, $this->workspacePath, $this->stringKeyedArray($configuration), $state->allocations);
+                    $resource = $this->docker->create($resource, $this->workspacePath, $configuration, $state->allocations);
                 }
                 $state = $state->withResource($resource);
                 $this->states->save($state);
@@ -64,24 +62,19 @@ final readonly class ManagedInfrastructure
         return $state;
     }
 
-    public function setupCompose(WorkspaceState $state, VariableBag $variables): WorkspaceState
+    /** @param null|callable(string, string): void $output */
+    public function setupCompose(WorkspaceState $state, VariableBag $variables, ?callable $output = null): WorkspaceState
     {
-        $projects = $this->config->get('harbour.compose', []);
-        if (! is_array($projects)) {
-            throw new HarbourException(ErrorCode::InvalidConfiguration, 'Harbour Compose projects must be an array.');
-        }
+        $projects = $this->config->compose;
 
         foreach ($projects as $name => $configuration) {
-            if (! is_string($name) || ! is_array($configuration)) {
-                continue;
-            }
-            $resource = $this->serviceResource($state, 'compose_project', $name);
+            $resource = $this->serviceResource($state, ResourceType::ComposeProject, $name);
             if ($resource === null) {
-                $resource = $this->compose->prepare($state->identity, $this->workspacePath, $name, $this->stringKeyedArray($configuration));
+                $resource = $this->compose->prepare($state->identity, $this->workspacePath, $name, $configuration);
                 $state = $state->withResource($resource);
                 $this->states->save($state);
             }
-            $this->compose->start($resource, $this->workspacePath, $variables->values());
+            $this->compose->start($resource, $this->workspacePath, $variables->values(), $output);
         }
 
         return $state;
@@ -97,7 +90,7 @@ final readonly class ManagedInfrastructure
         $this->docker->destroy($resource, $this->workspacePath);
     }
 
-    private function serviceResource(WorkspaceState $state, string $type, string $name): ?OwnedResource
+    private function serviceResource(WorkspaceState $state, ResourceType $type, string $name): ?OwnedResource
     {
         foreach ($state->resources as $resource) {
             if ($resource->type === $type && ($resource->metadata['service'] ?? $resource->metadata['name'] ?? null) === $name) {
@@ -106,22 +99,5 @@ final readonly class ManagedInfrastructure
         }
 
         return null;
-    }
-
-    /**
-     * @param  array<mixed>  $value
-     * @return array<string, mixed>
-     */
-    private function stringKeyedArray(array $value): array
-    {
-        $result = [];
-        foreach ($value as $key => $item) {
-            if (! is_string($key)) {
-                throw new HarbourException(ErrorCode::InvalidConfiguration, 'Configuration object keys must be strings.');
-            }
-            $result[$key] = $item;
-        }
-
-        return $result;
     }
 }

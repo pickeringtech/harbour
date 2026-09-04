@@ -6,6 +6,7 @@ namespace PickeringTech\Harbour\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
 use PickeringTech\Harbour\Environment\EnvironmentManager;
+use PickeringTech\Harbour\Exceptions\ErrorCode;
 use PickeringTech\Harbour\Exceptions\HarbourException;
 use PickeringTech\Harbour\Identity\WorkspaceIdentity;
 use PickeringTech\Harbour\State\WorkspaceState;
@@ -48,6 +49,31 @@ final class EnvironmentManagerTest extends TestCase
 
         $this->expectException(HarbourException::class);
         $manager->restore($state, false);
+    }
+
+    public function test_render_guard_allows_first_render_and_requires_force_after_manual_changes(): void
+    {
+        file_put_contents($this->directory.'/.env', "ORIGINAL=true\n");
+        $manager = new EnvironmentManager($this->directory);
+        $state = $manager->prepare(WorkspaceState::begin($this->identity(), $this->directory));
+
+        $manager->assertRenderable($state, false);
+        $state = $manager->render($state, "GENERATED=true\n");
+        file_put_contents($this->directory.'/.env', "MANUAL=true\n");
+
+        try {
+            $manager->assertRenderable($state, false);
+            self::fail('A modified rendered environment must be protected.');
+        } catch (HarbourException $exception) {
+            self::assertSame(ErrorCode::EnvironmentModified, $exception->errorCode);
+            self::assertStringContainsString('.env.harbour', $exception->getMessage());
+            self::assertStringContainsString('--force', $exception->getMessage());
+        }
+
+        $manager->assertRenderable($state, true);
+        $state = $manager->render($state, "REPLACED=true\n");
+        $manager->restore($state, false);
+        self::assertSame("ORIGINAL=true\n", file_get_contents($this->directory.'/.env'));
     }
 
     public function test_force_archives_manual_changes_without_weakening_restore(): void

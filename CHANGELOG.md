@@ -11,11 +11,29 @@ All notable changes will be documented here. The format follows
 - Releases are now reconciled from a reviewed append-only manifest into
   verified annotated tags, immutable GitHub releases, and checked Packagist
   mappings without a maintainer's local signing or publication ceremony.
+- `workspace:install --reconfigure` can replace only files carrying Harbour's
+  generated-file marker; project-authored files, `.gitignore`, and Composer
+  scripts retain their non-destructive rules.
+- Ready workspaces can opt into another seed run with `workspace:setup --seed`.
 - `workspace:install` now derives runtime requirements from the final selected
   stack and checks PHP extensions, Laravel client packages, Docker, and Compose
   before writing project files or starting infrastructure.
 - Missing installation requirements are aggregated into one actionable human
   report and the stable `HARBOUR_INSTALL_REQUIREMENTS_MISSING` JSON error.
+
+### Changed
+
+- Setup and rendering now refuse to replace a hand-edited Harbour-rendered
+  `.env` unless `--force` is explicit, and configured seeders run only on the
+  first setup, after `--fresh`, or when `--seed` is supplied.
+- Installer startup extracts the last valid setup JSON object despite leading
+  stdout warnings, and human `--start` streams managed-service output.
+- One structured installation-service specification now drives selection,
+  aliases, ports, Compose rendering, environment metadata, and detection.
+- Harbour configuration is parsed once into a typed value object; lifecycle
+  collaborators are registered in the container and injected into the manager.
+- Lifecycle hooks now use the shared command runner, owned-resource types are
+  exhaustive enums, and pending creation is represented by `OwnedResource`.
 
 ## [0.0.3] - 2026-09-04
 
