@@ -16,6 +16,10 @@
         {
             "version": "v0.0.4",
             "commit": "8cdc4e437e5b7c1fd4f6fb18bdae8de32c50d269"
+        },
+        {
+            "version": "v0.0.5",
+            "commit": "48eecd50d3b84153e84aa0a0130595447b35562a"
         }
     ]
 }
