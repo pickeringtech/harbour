@@ -48,3 +48,9 @@ composer workspace:teardown -- --force
 ```
 
 Incremental state lets teardown remove only what the failed attempt actually acquired.
+
+Do not delete `.harbour.json` as a substitute for teardown. The state contains
+the ownership tokens Harbour needs to clean resources safely. If the file is
+accidentally lost but a database remains, a later setup can recover it only
+when its internal marker proves it belongs to the exact same workspace.
+Otherwise Harbour fails closed and reports the underlying ownership error.

@@ -36,9 +36,14 @@ final class DatabaseIntegrationTest extends TestCase
         self::assertSame($resource, $driver->create($resource, sys_get_temp_dir(), $configuration));
 
         self::assertTrue($driver->exists($resource, $configuration));
-        $driver->destroy($resource, $configuration, sys_get_temp_dir());
+        $recovered = (new DatabaseManager([$driver]))->prepare($identity, $configuration, $database);
+        $recovered = $driver->create($recovered, sys_get_temp_dir(), $configuration);
         self::assertFalse($driver->exists($resource, $configuration));
-        $driver->destroy($resource, $configuration, sys_get_temp_dir());
+        self::assertTrue($driver->exists($recovered, $configuration));
+
+        $driver->destroy($recovered, $configuration, sys_get_temp_dir());
+        self::assertFalse($driver->exists($recovered, $configuration));
+        $driver->destroy($recovered, $configuration, sys_get_temp_dir());
     }
 
     #[DataProvider('servers')]
