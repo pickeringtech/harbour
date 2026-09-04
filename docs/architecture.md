@@ -144,8 +144,11 @@ directory; Compose removal is scoped to that project and does not request
 external-resource or persistent-volume deletion by default.
 
 SQLite records contain a normalized real parent path and must remain within the
-workspace. Harbour creates a missing file, but never claims a pre-existing
-file. Server databases are claimed only when Harbour itself created them.
+workspace. Harbour creates missing databases and normally requires exact state
+and marker evidence. A pending setup may recover stale marker evidence only
+when its strict shape and workspace identity prove that Harbour created the
+database for this same workspace; arbitrary pre-existing databases are never
+claimed.
 
 ## Variables
 
