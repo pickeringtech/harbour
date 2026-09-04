@@ -55,3 +55,8 @@ Explicit `secret: true` metadata is primary. Conservative credential-name detect
 ## Preserving `.env`
 
 Before rendering, Harbour stores the exact original bytes in a private mode-`0600` backup and records checksums. Ordinary teardown stops if the generated `.env` was edited. Forced teardown archives the modified copy before restoring the original; force does not discard it.
+
+Setup and `workspace:render` enforce the same checksum before writing. Put
+durable changes in `.env.harbour`; use `--force` only when the modified rendered
+file should be replaced. First-time setup has no rendered checksum and proceeds
+normally.

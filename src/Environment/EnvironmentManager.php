@@ -69,6 +69,25 @@ final readonly class EnvironmentManager
         ]);
     }
 
+    public function assertRenderable(WorkspaceState $state, bool $force): void
+    {
+        $renderedChecksum = $state->environment['rendered_checksum'] ?? null;
+        if (! is_string($renderedChecksum)) {
+            return;
+        }
+
+        $this->assertManagedPaths();
+        $current = is_file($this->environmentPath) ? file_get_contents($this->environmentPath) : null;
+        $currentChecksum = is_string($current) ? hash('sha256', $current) : null;
+
+        if ($currentChecksum !== $renderedChecksum && ! $force) {
+            throw new HarbourException(
+                ErrorCode::EnvironmentModified,
+                'The Harbour-rendered .env was modified. Put durable values in .env.harbour, or pass --force to replace the modified .env.',
+            );
+        }
+    }
+
     public function restore(WorkspaceState $state, bool $force): void
     {
         $this->assertRestorable($state, $force);

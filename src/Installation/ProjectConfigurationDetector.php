@@ -12,28 +12,10 @@ final readonly class ProjectConfigurationDetector
     /** @var list<string> */
     private const COMPOSE_FILES = ['compose.yaml', 'compose.yml', 'docker-compose.yaml', 'docker-compose.yml'];
 
-    /** @var array<string, int> */
-    private const DEFAULT_PORTS = [
-        'mysql' => 3306,
-        'mariadb' => 3306,
-        'pgsql' => 5432,
-        'mongodb' => 27017,
-        'redis' => 6379,
-        'valkey' => 6379,
-        'memcached' => 11211,
-        'meilisearch' => 7700,
-        'typesense' => 8108,
-        'minio' => 9000,
-        'rustfs' => 9000,
-        'mailpit' => 1025,
-        'rabbitmq' => 5672,
-        'selenium' => 4444,
-        'soketi' => 6001,
-    ];
-
     public function __construct(
         private string $workspacePath,
         private EnvironmentFile $environment = new EnvironmentFile,
+        private InstallationServiceCatalog $services = new InstallationServiceCatalog,
     ) {}
 
     public function discover(): InstallationDiscovery
@@ -83,7 +65,7 @@ final readonly class ProjectConfigurationDetector
         $database = $this->database($environment, $services, $detected);
         $cache = $this->cache($environment, $services, $detected);
         $mail = $this->mail($environment, $services, $detected);
-        $additional = array_values(array_intersect($services, InstallationSelection::ADDITIONAL_SERVICES));
+        $additional = array_values(array_intersect($services, $this->services->namesFor('additional')));
 
         return new InstallationDiscovery(
             new InstallationSelection($database, $cache, $mail, $additional),
@@ -153,13 +135,8 @@ final readonly class ProjectConfigurationDetector
     {
         $recognized = [];
         foreach ($services as $service) {
-            $normalized = match ($service) {
-                'postgres', 'postgresql' => 'pgsql',
-                'mongo' => 'mongodb',
-                'memcache' => 'memcached',
-                default => $service,
-            };
-            if (in_array($normalized, InstallationSelection::SAIL_SERVICES, true)) {
+            $normalized = $this->services->normalize($service);
+            if (in_array($normalized, $this->services->names(), true)) {
                 $recognized[] = $normalized;
             }
         }
@@ -176,26 +153,14 @@ final readonly class ProjectConfigurationDetector
     {
         $ports = [];
         foreach ($services as $service) {
-            $variable = match ($service) {
-                'mysql', 'mariadb', 'pgsql' => 'FORWARD_DB_PORT',
-                'mongodb' => 'FORWARD_MONGODB_PORT',
-                'redis', 'valkey' => 'FORWARD_REDIS_PORT',
-                'memcached' => 'FORWARD_MEMCACHED_PORT',
-                'meilisearch' => 'FORWARD_MEILISEARCH_PORT',
-                'typesense' => 'FORWARD_TYPESENSE_PORT',
-                'minio' => 'FORWARD_MINIO_PORT',
-                'rustfs' => 'FORWARD_RUSTFS_PORT',
-                'mailpit' => 'FORWARD_MAILPIT_PORT',
-                'rabbitmq' => 'FORWARD_RABBITMQ_PORT',
-                'selenium' => 'FORWARD_SELENIUM_PORT',
-                'soketi' => 'FORWARD_SOKETI_PORT',
-                default => null,
-            };
-            $port = $variable === null ? null : $this->portValue($environment[$variable] ?? null);
-            $ports[$service] = $port ?? self::DEFAULT_PORTS[$service];
+            $definition = $this->services->get($service)->ports;
+            $primary = $definition[$this->services->get($service)->primaryPortVariable()];
+            $port = $this->portValue($environment[$primary['forward']] ?? null);
+            $ports[$service] = $port ?? $primary['container'];
         }
         if (in_array('mailpit', $services, true)) {
-            $ports['mailpit-dashboard'] = $this->portValue($environment['FORWARD_MAILPIT_DASHBOARD_PORT'] ?? null) ?? 8025;
+            $dashboard = $this->services->get('mailpit')->ports['MAILPIT_DASHBOARD_PORT'];
+            $ports['mailpit-dashboard'] = $this->portValue($environment[$dashboard['forward']] ?? null) ?? $dashboard['container'];
         }
 
         return $ports;
@@ -278,7 +243,7 @@ final readonly class ProjectConfigurationDetector
             if (is_string($value) && preg_match('/^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$/', $value, $variable) === 1) {
                 $value = $environment[$variable[1]] ?? null;
             }
-            $ports[$service] = $this->portValue($value) ?? self::DEFAULT_PORTS[$service];
+            $ports[$service] = $this->portValue($value) ?? $this->services->get($service)->defaultPort();
         }
 
         return $ports;
@@ -287,12 +252,9 @@ final readonly class ProjectConfigurationDetector
     /** @return list<string> */
     private function serviceAliases(string $service): array
     {
-        return match ($service) {
-            'pgsql' => ['pgsql', 'postgres', 'postgresql'],
-            'mongodb' => ['mongodb', 'mongo'],
-            'memcached' => ['memcached', 'memcache'],
-            default => [$service],
-        };
+        $definition = $this->services->get($service);
+
+        return [$definition->name, ...$definition->aliases];
     }
 
     /**
@@ -317,18 +279,15 @@ final readonly class ProjectConfigurationDetector
             $services[] = 'mailpit';
         }
 
-        $signals = [
-            'MEILISEARCH_HOST' => 'meilisearch',
-            'TYPESENSE_HOST' => 'typesense',
-            'MINIO_ENDPOINT' => 'minio',
-            'RUSTFS_ENDPOINT' => 'rustfs',
-            'RABBITMQ_HOST' => 'rabbitmq',
-            'DUSK_DRIVER_URL' => 'selenium',
-            'PUSHER_HOST' => 'soketi',
-        ];
-        foreach ($signals as $key => $service) {
-            if (isset($environment[$key]) && $environment[$key] !== '') {
-                $services[] = $service;
+        foreach ($this->services->all() as $service) {
+            if ($service->group !== 'additional') {
+                continue;
+            }
+            foreach ($service->environmentKeys as $key) {
+                if (isset($environment[$key]) && $environment[$key] !== '') {
+                    $services[] = $service->name;
+                    break;
+                }
             }
         }
 
@@ -354,7 +313,7 @@ final readonly class ProjectConfigurationDetector
     private function database(array $environment, array $services, bool $detected): string
     {
         $configured = $this->normalizedDatabase($environment['DB_CONNECTION'] ?? null);
-        if (in_array($configured, InstallationSelection::DATABASES, true)) {
+        if (in_array($configured, InstallationSelection::databases(), true)) {
             return $configured;
         }
         foreach (['mysql', 'pgsql', 'mariadb', 'mongodb'] as $service) {
@@ -377,7 +336,7 @@ final readonly class ProjectConfigurationDetector
             if ($configured === 'array') {
                 return 'none';
             }
-            if (in_array($configured, InstallationSelection::CACHES, true)) {
+            if (in_array($configured, InstallationSelection::caches(), true)) {
                 return $configured;
             }
         }
@@ -419,10 +378,7 @@ final readonly class ProjectConfigurationDetector
             return null;
         }
 
-        return match (strtolower(trim($database))) {
-            'postgres', 'postgresql' => 'pgsql',
-            default => strtolower(trim($database)),
-        };
+        return $this->services->normalize(strtolower(trim($database)));
     }
 
     private function usesSail(): bool

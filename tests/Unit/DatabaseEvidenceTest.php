@@ -12,6 +12,7 @@ use PickeringTech\Harbour\Database\OwnedDatabaseEvidence;
 use PickeringTech\Harbour\Exceptions\HarbourException;
 use PickeringTech\Harbour\Identity\WorkspaceIdentity;
 use PickeringTech\Harbour\State\OwnedResource;
+use PickeringTech\Harbour\State\ResourceType;
 
 final class DatabaseEvidenceTest extends TestCase
 {
@@ -57,7 +58,7 @@ final class DatabaseEvidenceTest extends TestCase
 
         self::assertMatchesRegularExpression('/\Adb_[a-f0-9]{32}\z/', $resource->id);
         self::assertSame('ws_test', $resource->workspaceId);
-        self::assertSame('database', $resource->type);
+        self::assertSame(ResourceType::Database, $resource->type);
         self::assertSame('pgsql', $resource->driver);
         self::assertSame('harbour_test', $resource->metadata['database']);
         self::assertSame($configuration->fingerprint(), $resource->metadata['connection_fingerprint']);

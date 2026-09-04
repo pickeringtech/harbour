@@ -45,6 +45,7 @@ Options:
 | `--provider` | `shared`, `compose` | Use existing host/shared services or generate a workspace-specific Compose stack. |
 | `--compose` | — | Shorthand for `--provider=compose`. Generates `docker-compose.harbour.yml`. |
 | `--start` | — | Run `workspace:setup` after files are installed and wait for managed services to become ready. |
+| `--reconfigure` | — | Replace only files carrying Harbour's generated-file marker. Unmarked files, `.gitignore`, and Composer scripts remain protected. |
 | `--json` | — | Return the selected stack, discovery sources, and file changes using the stable JSON envelope. Use `--detect` or explicit selections. |
 
 Interactive auto-detection and manual configuration both ask whether to set up
@@ -78,6 +79,9 @@ Purpose: make the current checkout usable. Setup allocates ports, creates the wo
 then builds them again. Add `--force` to suppress the confirmation prompt.
 Non-interactive `--fresh` and teardown fail closed without `--force`; an
 interactive “no” is reported as an abort without claiming work completed.
+Configured seeders run on first setup and after `--fresh`. Use `--seed` to seed
+an already-ready workspace intentionally. If the rendered `.env` was edited,
+setup refuses to replace it unless `--force` is supplied.
 
 ## `workspace:status`
 
@@ -114,7 +118,7 @@ Secret values are omitted unless an output mode explicitly allows `--show-secret
 php artisan workspace:render
 ```
 
-Purpose: render `.env.harbour` into `.env` again using the existing workspace allocations. Use it after intentionally changing the template; it does not recreate the workspace.
+Purpose: render `.env.harbour` into `.env` again using the existing workspace allocations. Use it after intentionally changing the template; it does not recreate the workspace. A checksum mismatch protects hand edits; move durable values to `.env.harbour` or pass `--force` to replace the modified render.
 
 ## `workspace:debug`
 

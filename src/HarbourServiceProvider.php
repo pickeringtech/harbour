@@ -27,13 +27,22 @@ use PickeringTech\Harbour\Database\PostgreSqlDatabaseDriver;
 use PickeringTech\Harbour\Database\SqliteDatabaseDriver;
 use PickeringTech\Harbour\Docker\ComposeManager;
 use PickeringTech\Harbour\Docker\DockerManager;
+use PickeringTech\Harbour\Environment\EnvironmentFile;
 use PickeringTech\Harbour\Environment\EnvironmentManager;
+use PickeringTech\Harbour\Environment\EnvironmentTemplate;
 use PickeringTech\Harbour\Exceptions\ErrorCode;
 use PickeringTech\Harbour\Exceptions\HarbourException;
+use PickeringTech\Harbour\Hooks\LifecycleHookRunner;
+use PickeringTech\Harbour\Identity\ContextIdentifier;
 use PickeringTech\Harbour\Identity\DefaultWorkspaceIdentityStrategy;
 use PickeringTech\Harbour\Installation\ArtisanWorkspaceStarter;
 use PickeringTech\Harbour\Installation\ProjectConfigurationDetector;
 use PickeringTech\Harbour\Installation\ProjectInstaller;
+use PickeringTech\Harbour\Lifecycle\DatabaseLifecycle;
+use PickeringTech\Harbour\Lifecycle\ManagedInfrastructure;
+use PickeringTech\Harbour\Lifecycle\SetupSequence;
+use PickeringTech\Harbour\Lifecycle\TeardownSequence;
+use PickeringTech\Harbour\Lifecycle\VariablePipeline;
 use PickeringTech\Harbour\Ports\DefaultPortAllocationStrategy;
 use PickeringTech\Harbour\Ports\FilePortRegistry;
 use PickeringTech\Harbour\Process\SymfonyCommandRunner;
@@ -46,6 +55,7 @@ final class HarbourServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(__DIR__.'/../config/harbour.php', 'harbour');
 
+        $this->app->singleton(HarbourConfig::class, fn (Application $app): HarbourConfig => HarbourConfig::fromRepository($app->make(ConfigRepository::class)));
         $this->app->singleton(FilePortRegistry::class, fn (Application $app): FilePortRegistry => new FilePortRegistry($this->registryPath($app)));
         $this->app->singleton(CommandRunner::class, SymfonyCommandRunner::class);
         $this->app->singleton(WorkspaceIdentityStrategy::class, function (Application $app): WorkspaceIdentityStrategy {
@@ -73,10 +83,7 @@ final class HarbourServiceProvider extends ServiceProvider
             return $strategy;
         });
         $this->app->singleton(WorkspaceStateRepository::class, function (Application $app): WorkspaceStateRepository {
-            $state = $app->make(ConfigRepository::class)->get('harbour.state', '.harbour.json');
-            if (! is_string($state) || ! preg_match('/\A[A-Za-z0-9._-]+\z/', $state)) {
-                throw new HarbourException(ErrorCode::InvalidConfiguration, 'Harbour state must be a safe workspace-local filename.');
-            }
+            $state = $app->make(HarbourConfig::class)->stateFilename;
 
             return new FileWorkspaceStateRepository($this->workspacePath($app).'/'.$state);
         });
@@ -93,22 +100,71 @@ final class HarbourServiceProvider extends ServiceProvider
             $app->make(MySqlDatabaseDriver::class),
             $app->make(SqliteDatabaseDriver::class),
         ]));
+        $this->app->singleton(VariablePipeline::class, fn (Application $app): VariablePipeline => new VariablePipeline(
+            $this->workspacePath($app),
+            $app->make(HarbourConfig::class),
+            $app,
+            $app->make(EnvironmentTemplate::class),
+            $app->make(EnvironmentFile::class),
+            $app->make(ContextIdentifier::class),
+        ));
+        $this->app->singleton(LifecycleHookRunner::class, fn (Application $app): LifecycleHookRunner => new LifecycleHookRunner(
+            $this->workspacePath($app),
+            $app->make(HarbourConfig::class),
+            $app->make(CommandRunner::class),
+        ));
+        $this->app->singleton(ManagedInfrastructure::class, fn (Application $app): ManagedInfrastructure => new ManagedInfrastructure(
+            $this->workspacePath($app),
+            $app->make(HarbourConfig::class),
+            $app->make(WorkspaceStateRepository::class),
+            $app->make(DockerManager::class),
+            $app->make(ComposeManager::class),
+        ));
+        $this->app->singleton(DatabaseLifecycle::class, fn (Application $app): DatabaseLifecycle => new DatabaseLifecycle(
+            $this->workspacePath($app),
+            $app->make(HarbourConfig::class),
+            $app->make(ConfigRepository::class),
+            $app->make(WorkspaceStateRepository::class),
+            $app->make(EnvironmentFile::class),
+            $app->make(ContextIdentifier::class),
+            $app->make(DatabaseManager::class),
+            $app->make(VariablePipeline::class),
+        ));
+        $this->app->singleton(SetupSequence::class, fn (Application $app): SetupSequence => new SetupSequence(
+            $this->workspacePath($app),
+            $app->make(HarbourConfig::class),
+            $app,
+            $app->make(Dispatcher::class),
+            $app->make(WorkspaceIdentityStrategy::class),
+            $app->make(PortAllocationStrategy::class),
+            $app->make(WorkspaceStateRepository::class),
+            $app->make(EnvironmentManager::class),
+            $app->make(EnvironmentTemplate::class),
+            $app->make(VariablePipeline::class),
+            $app->make(ManagedInfrastructure::class),
+            $app->make(DatabaseLifecycle::class),
+            $app->make(LifecycleHookRunner::class),
+        ));
+        $this->app->singleton(TeardownSequence::class, fn (Application $app): TeardownSequence => new TeardownSequence(
+            $app->make(Dispatcher::class),
+            $app->make(PortAllocationStrategy::class),
+            $app->make(WorkspaceStateRepository::class),
+            $app->make(EnvironmentManager::class),
+            $app->make(VariablePipeline::class),
+            $app->make(ManagedInfrastructure::class),
+            $app->make(DatabaseLifecycle::class),
+            $app->make(LifecycleHookRunner::class),
+        ));
         $this->app->singleton(WorkspaceManager::class, fn (Application $app): WorkspaceManager => new WorkspaceManager(
             workspacePath: $this->workspacePath($app),
-            config: $app->make(ConfigRepository::class),
-            container: $app,
-            events: $app->make(Dispatcher::class),
-            identityStrategy: $app->make(WorkspaceIdentityStrategy::class),
-            portStrategy: $app->make(PortAllocationStrategy::class),
+            config: $app->make(HarbourConfig::class),
             states: $app->make(WorkspaceStateRepository::class),
             environment: $app->make(EnvironmentManager::class),
-            templates: $app->make(Environment\EnvironmentTemplate::class),
-            environmentFile: $app->make(Environment\EnvironmentFile::class),
-            identifiers: $app->make(Identity\ContextIdentifier::class),
-            databases: $app->make(DatabaseManager::class),
-            docker: $app->make(DockerManager::class),
-            compose: $app->make(ComposeManager::class),
-            hooks: $app->make(Hooks\LifecycleHookRunner::class),
+            templates: $app->make(EnvironmentTemplate::class),
+            variables: $app->make(VariablePipeline::class),
+            database: $app->make(DatabaseLifecycle::class),
+            setupSequence: $app->make(SetupSequence::class),
+            teardownSequence: $app->make(TeardownSequence::class),
             lock: $app->make(LifecycleLock::class),
         ));
     }

@@ -6,6 +6,7 @@ namespace PickeringTech\Harbour\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
 use PickeringTech\Harbour\Installation\InstallationComposeRenderer;
+use PickeringTech\Harbour\Installation\InstallationFileRenderer;
 use PickeringTech\Harbour\Installation\InstallationSelection;
 use PickeringTech\Harbour\Installation\InstallationServiceCatalog;
 
@@ -43,14 +44,34 @@ final class InstallationComposeRendererTest extends TestCase
         $catalog = new InstallationServiceCatalog;
         $renderer = new InstallationComposeRenderer($catalog);
 
-        foreach (InstallationSelection::SAIL_SERVICES as $service) {
+        foreach ($catalog->all() as $service => $specification) {
             $selection = InstallationSelection::fromOptions(null, null, null, $service, 'compose');
             $compose = $renderer->render($selection);
 
             self::assertStringContainsString("  {$service}:\n", $compose, $service);
             self::assertNotSame([], $catalog->portsFor($service), $service);
+            self::assertNotSame('', $specification->image, $service);
+            self::assertContains($specification->group, ['database', 'cache', 'mail', 'additional']);
             self::assertStringContainsString("    healthcheck:\n", $compose, $service);
             self::assertDoesNotMatchRegularExpression('/^\s*image:\s*[^\s]*(?::latest|:alpine|latest-|\/[^:\s]+)$/m', $compose, $service);
+        }
+    }
+
+    public function test_every_service_projects_its_environment_fragment_from_the_specification(): void
+    {
+        $catalog = new InstallationServiceCatalog;
+        $renderer = new InstallationFileRenderer($catalog);
+
+        foreach ($catalog->all() as $name => $service) {
+            $sharedEnvironment = $renderer->environment(InstallationSelection::fromOptions(null, null, null, $name));
+            $composeEnvironment = $renderer->environment(InstallationSelection::fromOptions(null, null, null, $name, 'compose'));
+
+            self::assertStringNotContainsString('{{', $sharedEnvironment, "{$name}:shared");
+            self::assertStringNotContainsString('{{', $composeEnvironment, "{$name}:compose");
+            foreach ($service->environmentKeys as $variable) {
+                self::assertStringContainsString("{$variable}=", $sharedEnvironment, "{$name}:shared:{$variable}");
+                self::assertStringContainsString("{$variable}=", $composeEnvironment, "{$name}:compose:{$variable}");
+            }
         }
     }
 
@@ -66,7 +87,7 @@ final class InstallationComposeRendererTest extends TestCase
     public function test_port_definitions_are_named_unique_and_valid(): void
     {
         $catalog = new InstallationServiceCatalog;
-        $definitions = $catalog->portDefinitions(InstallationSelection::SAIL_SERVICES);
+        $definitions = $catalog->portDefinitions($catalog->names());
 
         self::assertArrayHasKey('DB_PORT', $definitions);
         self::assertArrayHasKey('REDIS_PORT', $definitions);

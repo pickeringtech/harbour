@@ -51,6 +51,11 @@ flowchart TB
     linkStyle 12,13,14,15 stroke:#a8a8a4,stroke-width:1.5px
 ```
 
+`HarbourConfig` validates project policy once at the container boundary.
+`VariablePipeline`, `DatabaseLifecycle`, `ManagedInfrastructure`, both
+sequences, and the hook runner are registered collaborators injected into the
+manager; the manager does not assemble a lifecycle graph itself.
+
 The domain layer does not depend on Laravel Console. Infrastructure adapters
 may use Laravel's container, configuration repository, database manager,
 events, filesystem, and process APIs.
@@ -115,7 +120,8 @@ already removed, while mismatched ownership evidence is an error.
 ## Setup sequence
 
 1. Refuse an unsafe runtime and acquire the workspace lifecycle lock.
-2. Load and validate state, reusing its identity after a checkout move/rename.
+2. Load and validate state, refusing a changed prior `.env` render unless
+   `--force` was explicit, and reuse its identity after a checkout move/rename.
 3. Resolve Git/path identity and safe context-specific identifiers.
 4. Write `preparing`, reserve configured ports through the global registry,
    warn about configured port-variable overrides, and persist each allocation.
@@ -125,22 +131,24 @@ already removed, while mismatched ownership evidence is an error.
 7. Persist a pending logical-database record, create its ownership marker, and
    persist creation completion immediately.
 8. Resolve the complete variable set and atomically render `.env`.
-9. Run normal migrations, optional seeding, hooks, and Laravel events.
+9. Run normal migrations, first-setup (or explicit `--seed`) seeding, hooks,
+   and Laravel events.
 10. Validate the result and write `ready`.
 
 ## Teardown sequence
 
 1. Acquire the same lifecycle lock and load the recorded state.
-2. Run the before-teardown event and configured hooks.
-3. Remove the database after driver-specific ownership and safety checks.
-4. Remove Compose and Docker resources after external ownership verification.
-5. Restore `.env` only if its rendered checksum still matches Harbour state.
-6. Release recorded port reservations owned by this workspace.
-7. Run the after-teardown hooks/event and atomically remove local state.
+2. Preflight `.env` restoration before any destructive mutation.
+3. Run the before-teardown event and configured hooks.
+4. Remove the database after driver-specific ownership and safety checks.
+5. Remove Compose and Docker resources after external ownership verification.
+6. Restore `.env` only if its rendered checksum still matches Harbour state.
+7. Release recorded port reservations owned by this workspace.
+8. Run the after-teardown hooks/event and atomically remove local state.
 
-`--force` suppresses interaction and permits replacement of a modified
-Harbour-rendered `.env`; it never bypasses resource, database, path, or Docker
-ownership guards.
+`--force` suppresses interaction and permits setup/render replacement or
+teardown archival of a modified Harbour-rendered `.env`; it never bypasses
+resource, database, path, or Docker ownership guards.
 
 ## State and locking
 
@@ -164,6 +172,22 @@ Every destructive operation starts from a versioned resource record written
 before external creation begins. Records include a resource ID, workspace ID, type, creation
 marker, driver, and sufficient immutable external identity. Teardown does not
 derive a database/container/project name from current configuration.
+Resource types are a backed enum, so teardown handles every persisted type
+explicitly. The resource itself exposes pending-create state shared by database
+and Docker lifecycle code.
+
+## Installer service specification
+
+Every supported Sail-compatible dependency has one structured
+`InstallationService` definition. Its group/label, aliases, image, ports and
+`FORWARD_*` variables, Compose environment, volume, healthcheck, environment
+keys, and SQL-ownership capability feed the installer, renderer, and detector.
+Adding a service therefore extends the specification and its structural tests,
+not parallel switch statements.
+
+Discovery intentionally parses only the Sail/Herd subset needed to identify
+top-level service names and Herd `port` entries. It is not a general YAML
+parser, and service-specific regular expressions are not an extension point.
 
 Database resources use generated context-safe identifiers and retain the
 connection fingerprint that created them. Docker resources additionally use

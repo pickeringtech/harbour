@@ -13,11 +13,11 @@ final class SymfonyCommandRunner implements CommandRunner
      * @param  list<string>  $command
      * @param  array<string, string>  $environment
      */
-    public function run(array $command, string $workingDirectory, array $environment = []): ProcessResult
+    public function run(array $command, string $workingDirectory, array $environment = [], ?callable $output = null): ProcessResult
     {
         $process = new Process($command, $workingDirectory, $environment);
         $process->setTimeout(null);
-        $process->run();
+        $process->run($output);
 
         return new ProcessResult($process->getExitCode() ?? 1, trim($process->getOutput()), trim($process->getErrorOutput()));
     }

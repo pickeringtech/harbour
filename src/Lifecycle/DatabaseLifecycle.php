@@ -11,15 +11,18 @@ use PickeringTech\Harbour\Database\DatabaseManager;
 use PickeringTech\Harbour\Environment\EnvironmentFile;
 use PickeringTech\Harbour\Exceptions\ErrorCode;
 use PickeringTech\Harbour\Exceptions\HarbourException;
+use PickeringTech\Harbour\HarbourConfig;
 use PickeringTech\Harbour\Identity\ContextIdentifier;
 use PickeringTech\Harbour\State\OwnedResource;
+use PickeringTech\Harbour\State\ResourceType;
 use PickeringTech\Harbour\State\WorkspaceState;
 
 final readonly class DatabaseLifecycle
 {
     public function __construct(
         private string $workspacePath,
-        private ConfigRepository $config,
+        private HarbourConfig $config,
+        private ConfigRepository $laravelConfig,
         private WorkspaceStateRepository $states,
         private EnvironmentFile $environmentFile,
         private ContextIdentifier $identifiers,
@@ -30,7 +33,7 @@ final readonly class DatabaseLifecycle
     /** @return array{WorkspaceState, ?string} */
     public function setup(WorkspaceState $state): array
     {
-        if (! (bool) $this->config->get('harbour.database.enabled', true)) {
+        if (! $this->config->databaseEnabled) {
             return [$state, null];
         }
 
@@ -52,7 +55,7 @@ final readonly class DatabaseLifecycle
                 throw new HarbourException(ErrorCode::StateCorrupted, 'Database resource has no valid database name.');
             }
             $databaseName = $recordedDatabase;
-            if ($this->databases->creationPending($database)) {
+            if ($database->creationPending()) {
                 // prepare() is persisted before create(). A retry may finish that
                 // exact operation, but create() still rejects an unowned collision.
                 $database = $this->databases->create($database, $this->workspacePath, $configuration);
@@ -78,18 +81,12 @@ final readonly class DatabaseLifecycle
 
     public function resource(WorkspaceState $state): ?OwnedResource
     {
-        foreach ($state->resources as $resource) {
-            if ($resource->type === 'database') {
-                return $resource;
-            }
-        }
-
-        return null;
+        return $state->resource(ResourceType::Database);
     }
 
     private function configuration(?string $forceDriver = null, ?WorkspaceState $state = null): DatabaseConfiguration
     {
-        $configured = $this->config->get('harbour.database.connection');
+        $configured = $this->config->databaseConnection;
         if ($forceDriver !== null) {
             $connection = is_string($configured) && $configured !== '' ? $configured : $this->configuredString('database.default');
         } else {
@@ -100,7 +97,7 @@ final readonly class DatabaseLifecycle
                     ? $templateValues['DB_CONNECTION']
                     : $this->configuredString('database.default'));
         }
-        $data = $this->config->get('database.connections.'.$connection, []);
+        $data = $this->laravelConfig->get('database.connections.'.$connection, []);
 
         if (! is_array($data)) {
             throw new HarbourException(ErrorCode::InvalidConfiguration, "Laravel database connection [{$connection}] is not configured.");
@@ -109,7 +106,7 @@ final readonly class DatabaseLifecycle
             $data['driver'] = $forceDriver;
         }
 
-        if ($state !== null && $this->config->get('harbour.installation.provider') === 'compose') {
+        if ($state !== null && $this->config->installationProvider === 'compose') {
             $template = $this->environmentFile->parse($this->variables->templateContents());
             foreach ([
                 'host' => 'DB_HOST',
@@ -132,7 +129,7 @@ final readonly class DatabaseLifecycle
     private function desiredDatabase(DatabaseConfiguration $configuration, WorkspaceState $state): string
     {
         if ($configuration->driver === 'sqlite') {
-            return $this->workspacePath.'/'.ltrim($this->configuredString('harbour.database.sqlite_path', 'database/harbour.sqlite'), '/');
+            return $this->workspacePath.'/'.ltrim($this->config->databaseSqlitePath, '/');
         }
 
         return $this->identifiers->database($state->identity, $this->variables->projectName());
@@ -140,17 +137,17 @@ final readonly class DatabaseLifecycle
 
     private function applyToLaravel(DatabaseConfiguration $configuration, string $database): void
     {
-        $connection = $this->config->get('harbour.database.connection');
-        if (! is_string($connection) || $connection === '') {
+        $connection = $this->config->databaseConnection;
+        if ($connection === null || $connection === '') {
             $connection = $configuration->driver;
         }
-        $this->config->set('database.default', $connection);
+        $this->laravelConfig->set('database.default', $connection);
         foreach (['host', 'port', 'username', 'password'] as $key) {
             if ($configuration->{$key} !== null) {
-                $this->config->set('database.connections.'.$connection.'.'.$key, $configuration->{$key});
+                $this->laravelConfig->set('database.connections.'.$connection.'.'.$key, $configuration->{$key});
             }
         }
-        $this->config->set('database.connections.'.$connection.'.database', $database);
+        $this->laravelConfig->set('database.connections.'.$connection.'.database', $database);
     }
 
     private function managedValue(string $value, WorkspaceState $state): string|int
@@ -188,9 +185,9 @@ final readonly class DatabaseLifecycle
         return $result;
     }
 
-    private function configuredString(string $key, string $default = ''): string
+    private function configuredString(string $key): string
     {
-        $value = $this->config->get($key, $default);
+        $value = $this->laravelConfig->get($key);
         if (! is_string($value)) {
             throw new HarbourException(ErrorCode::InvalidConfiguration, "Configuration [{$key}] must be a string.");
         }

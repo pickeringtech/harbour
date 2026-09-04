@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PickeringTech\Harbour\Installation;
 
+use JsonException;
 use PickeringTech\Harbour\Contracts\CommandRunner;
 use PickeringTech\Harbour\Contracts\InstalledWorkspaceStarter;
 use PickeringTech\Harbour\Exceptions\ErrorCode;
@@ -18,7 +19,7 @@ final readonly class ArtisanWorkspaceStarter implements InstalledWorkspaceStarte
         private CommandRunner $processes,
     ) {}
 
-    public function start(): string
+    public function start(?callable $output = null): string
     {
         $artisan = $this->workspacePath.'/artisan';
         WorkspacePath::assertSafe($this->workspacePath, $artisan);
@@ -43,7 +44,11 @@ final readonly class ArtisanWorkspaceStarter implements InstalledWorkspaceStarte
             }
         }
 
-        $result = $this->processes->run([PHP_BINARY, $artisan, 'workspace:setup', '--json'], $this->workspacePath);
+        $command = [PHP_BINARY, $artisan, 'workspace:setup', '--json'];
+        if ($output !== null) {
+            $command[] = '--stream';
+        }
+        $result = $this->processes->run($command, $this->workspacePath, [], $output);
         if (! $result->successful()) {
             throw new HarbourException(
                 ErrorCode::ProcessFailed,
@@ -52,16 +57,75 @@ final readonly class ArtisanWorkspaceStarter implements InstalledWorkspaceStarte
             );
         }
 
-        $payload = json_decode($result->output, true);
-        $workspace = is_array($payload) ? ($payload['workspace'] ?? null) : null;
-        if (! is_array($workspace) || ($payload['ok'] ?? null) !== true) {
+        self::workspaceFromOutput($result->output, ['exit_code' => $result->exitCode]);
+
+        return $result->output;
+    }
+
+    /**
+     * @param  array<string, bool|float|int|string|null>  $context
+     * @return array<string, mixed>
+     */
+    public static function workspaceFromOutput(string $output, array $context = []): array
+    {
+        $workspace = null;
+        $length = strlen($output);
+
+        for ($start = 0; $start < $length; $start++) {
+            if ($output[$start] !== '{') {
+                continue;
+            }
+
+            $depth = 0;
+            $quoted = false;
+            $escaped = false;
+            for ($end = $start; $end < $length; $end++) {
+                $character = $output[$end];
+                if ($quoted) {
+                    if ($escaped) {
+                        $escaped = false;
+                    } elseif ($character === '\\') {
+                        $escaped = true;
+                    } elseif ($character === '"') {
+                        $quoted = false;
+                    }
+
+                    continue;
+                }
+
+                if ($character === '"') {
+                    $quoted = true;
+                } elseif ($character === '{') {
+                    $depth++;
+                } elseif ($character === '}' && --$depth === 0) {
+                    try {
+                        $payload = json_decode(substr($output, $start, $end - $start + 1), true, flags: JSON_THROW_ON_ERROR);
+                    } catch (JsonException) {
+                        break;
+                    }
+                    $candidate = is_array($payload) ? ($payload['workspace'] ?? null) : null;
+                    if (is_array($candidate) && ! array_is_list($candidate) && ($payload['ok'] ?? null) === true) {
+                        $workspace = [];
+                        foreach ($candidate as $key => $value) {
+                            if (is_string($key)) {
+                                $workspace[$key] = $value;
+                            }
+                        }
+                    }
+
+                    break;
+                }
+            }
+        }
+
+        if ($workspace === null) {
             throw new HarbourException(
                 ErrorCode::ProcessFailed,
-                'Harbour setup completed without a valid workspace status payload. Run composer workspace:status to inspect it.',
-                ['exit_code' => $result->exitCode],
+                'Harbour setup completed without a valid workspace status payload. Run composer workspace:setup to retry or composer workspace:status to inspect it.',
+                $context,
             );
         }
 
-        return $result->output;
+        return $workspace;
     }
 }

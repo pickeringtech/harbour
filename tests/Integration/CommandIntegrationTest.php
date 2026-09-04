@@ -375,6 +375,25 @@ final class CommandIntegrationTest extends TestCase
         $manager->teardown(true);
     }
 
+    public function test_setup_and_render_require_force_before_replacing_a_modified_environment(): void
+    {
+        $manager = $this->application()->make(WorkspaceManager::class);
+        $manager->setup();
+        file_put_contents($this->workspaceDirectory.'/.env', "MANUAL=true\n");
+
+        self::assertSame(1, Artisan::call('workspace:setup', ['--json' => true]));
+        self::assertStringContainsString('HARBOUR_ENVIRONMENT_MODIFIED', Artisan::output());
+        self::assertSame("MANUAL=true\n", file_get_contents($this->workspaceDirectory.'/.env'));
+
+        self::assertSame(1, Artisan::call('workspace:render', ['--json' => true]));
+        self::assertStringContainsString('HARBOUR_ENVIRONMENT_MODIFIED', Artisan::output());
+        self::assertSame(0, Artisan::call('workspace:render', ['--force' => true, '--json' => true]));
+        self::assertNotSame("MANUAL=true\n", file_get_contents($this->workspaceDirectory.'/.env'));
+
+        $manager->teardown(true);
+        self::assertSame("ORIGINAL=yes\n", file_get_contents($this->workspaceDirectory.'/.env'));
+    }
+
     public function test_teardown_can_be_declined_interactively(): void
     {
         $manager = $this->application()->make(WorkspaceManager::class);
@@ -472,7 +491,7 @@ final class FakeInstalledWorkspaceStarter implements InstalledWorkspaceStarter
 {
     public bool $started = false;
 
-    public function start(): string
+    public function start(?callable $output = null): string
     {
         $this->started = true;
 
@@ -482,7 +501,11 @@ final class FakeInstalledWorkspaceStarter implements InstalledWorkspaceStarter
 
 final class CommandFailureRunner implements CommandRunner
 {
-    public function run(array $command, string $workingDirectory, array $environment = []): ProcessResult
+    /**
+     * @param  list<string>  $command
+     * @param  array<string, string>  $environment
+     */
+    public function run(array $command, string $workingDirectory, array $environment = [], ?callable $output = null): ProcessResult
     {
         return new ProcessResult(1, '', 'compose healthcheck failed');
     }
@@ -490,7 +513,11 @@ final class CommandFailureRunner implements CommandRunner
 
 final class SuccessfulCommandRunner implements CommandRunner
 {
-    public function run(array $command, string $workingDirectory, array $environment = []): ProcessResult
+    /**
+     * @param  list<string>  $command
+     * @param  array<string, string>  $environment
+     */
+    public function run(array $command, string $workingDirectory, array $environment = [], ?callable $output = null): ProcessResult
     {
         return new ProcessResult(0, '');
     }

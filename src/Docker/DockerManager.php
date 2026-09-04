@@ -11,6 +11,7 @@ use PickeringTech\Harbour\Identity\ContextIdentifier;
 use PickeringTech\Harbour\Identity\WorkspaceIdentity;
 use PickeringTech\Harbour\Process\ProcessFailure;
 use PickeringTech\Harbour\State\OwnedResource;
+use PickeringTech\Harbour\State\ResourceType;
 
 final readonly class DockerManager
 {
@@ -29,7 +30,7 @@ final readonly class DockerManager
     {
         $resourceId = 'docker_'.bin2hex(random_bytes(16));
 
-        return new OwnedResource($resourceId, $workspace->id(), 'docker_container', 'docker', [
+        return new OwnedResource($resourceId, $workspace->id(), ResourceType::DockerContainer, 'docker', [
             'service' => $name,
             'container_name' => $this->identifiers->docker($workspace, $name),
             'creation_pending' => true,
@@ -100,7 +101,7 @@ final readonly class DockerManager
             throw new HarbourException(ErrorCode::ProcessFailed, "Unable to create Docker service [{$name}].", ProcessFailure::context($result, $environment));
         }
 
-        return new OwnedResource($resourceId, $resource->workspaceId, 'docker_container', 'docker', [
+        return new OwnedResource($resourceId, $resource->workspaceId, ResourceType::DockerContainer, 'docker', [
             'service' => $name,
             'container_id' => $result->output,
             'container_name' => $container,
@@ -131,7 +132,7 @@ final readonly class DockerManager
 
     public function assertOwned(OwnedResource $resource, string $workspacePath): void
     {
-        if (! $resource->createdByHarbour || $resource->type !== 'docker_container') {
+        if (! $resource->createdByHarbour || $resource->type !== ResourceType::DockerContainer) {
             throw new HarbourException(ErrorCode::DockerResourceNotOwned, 'Docker resource is not marked as Harbour-owned.');
         }
         $result = $this->processes->run([
@@ -152,21 +153,9 @@ final readonly class DockerManager
         return $this->processes->run(['docker', 'inspect', $this->containerId($resource)], $workspacePath)->successful();
     }
 
-    public function creationPending(OwnedResource $resource): bool
-    {
-        return ($resource->metadata['creation_pending'] ?? false) === true;
-    }
-
     public function confirmCreated(OwnedResource $resource): OwnedResource
     {
-        return new OwnedResource(
-            $resource->id,
-            $resource->workspaceId,
-            $resource->type,
-            $resource->driver,
-            [...$resource->metadata, 'creation_pending' => false],
-            $resource->createdByHarbour,
-        );
+        return $resource->created();
     }
 
     private function containerId(OwnedResource $resource): string

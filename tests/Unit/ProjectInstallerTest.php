@@ -124,6 +124,24 @@ final class ProjectInstallerTest extends TestCase
         self::assertContains('docker-compose.harbour.yml', $result->unchanged);
     }
 
+    public function test_reconfigure_replaces_only_files_marked_as_generated_by_harbour(): void
+    {
+        $installer = new ProjectInstaller($this->workspace);
+        $installer->install(self::selection());
+        file_put_contents($this->workspace.'/.env.harbour', "CUSTOM=yes\n");
+
+        $result = $installer->install(
+            InstallationSelection::fromOptions('pgsql', 'redis', 'mailpit', 'none', 'compose'),
+            true,
+        );
+
+        self::assertSame("CUSTOM=yes\n", file_get_contents($this->workspace.'/.env.harbour'));
+        self::assertContains('config/harbour.php', $result->updated);
+        self::assertContains('docker-compose.harbour.yml', $result->created);
+        self::assertNotContains('.gitignore', $result->updated);
+        self::assertNotContains('composer.json', $result->updated);
+    }
+
     public function test_it_rejects_an_unsafe_installation_target(): void
     {
         symlink('/tmp', $this->workspace.'/.env.harbour');

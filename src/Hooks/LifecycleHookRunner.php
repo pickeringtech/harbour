@@ -4,39 +4,32 @@ declare(strict_types=1);
 
 namespace PickeringTech\Harbour\Hooks;
 
+use PickeringTech\Harbour\Contracts\CommandRunner;
 use PickeringTech\Harbour\Exceptions\ErrorCode;
 use PickeringTech\Harbour\Exceptions\HarbourException;
+use PickeringTech\Harbour\HarbourConfig;
 use PickeringTech\Harbour\Process\ProcessFailure;
-use PickeringTech\Harbour\Process\ProcessResult;
-use Symfony\Component\Process\Process;
+use PickeringTech\Harbour\Variables\VariableBag;
 
-final class LifecycleHookRunner
+final readonly class LifecycleHookRunner
 {
-    /**
-     * @param  list<string|list<string>>  $commands
-     * @param  array<string, string>  $environment
-     */
-    public function run(string $stage, array $commands, string $workingDirectory, array $environment): void
-    {
-        foreach ($commands as $command) {
-            $process = is_array($command)
-                ? new Process($command, $workingDirectory, $environment)
-                : Process::fromShellCommandline($command, $workingDirectory, $environment);
-            $process->setTimeout(null);
-            $process->run();
+    public function __construct(
+        private string $workspacePath,
+        private HarbourConfig $config,
+        private CommandRunner $processes,
+    ) {}
 
-            if (! $process->isSuccessful()) {
+    public function run(string $stage, VariableBag $variables): void
+    {
+        $commands = $this->config->hooks[$stage] ?? [];
+
+        foreach ($commands as $arguments) {
+            $result = $this->processes->run($arguments, $this->workspacePath, $variables->values());
+            if (! $result->successful()) {
                 throw new HarbourException(
                     ErrorCode::ProcessFailed,
-                    "Lifecycle hook failed during [{$stage}] with exit code {$process->getExitCode()}.",
-                    [
-                        'stage' => $stage,
-                        ...ProcessFailure::context(new ProcessResult(
-                            $process->getExitCode() ?? 1,
-                            $process->getOutput(),
-                            $process->getErrorOutput(),
-                        ), $environment),
-                    ],
+                    "Lifecycle hook failed during [{$stage}] with exit code {$result->exitCode}.",
+                    ['stage' => $stage, ...ProcessFailure::context($result, $variables->values())],
                 );
             }
         }

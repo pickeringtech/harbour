@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace PickeringTech\Harbour\Lifecycle;
 
-use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Contracts\Container\Container;
 use PickeringTech\Harbour\Contracts\WorkspaceVariableResolver;
 use PickeringTech\Harbour\Environment\EnvironmentFile;
 use PickeringTech\Harbour\Environment\EnvironmentTemplate;
 use PickeringTech\Harbour\Exceptions\ErrorCode;
 use PickeringTech\Harbour\Exceptions\HarbourException;
+use PickeringTech\Harbour\HarbourConfig;
 use PickeringTech\Harbour\Identity\ContextIdentifier;
 use PickeringTech\Harbour\State\WorkspaceState;
 use PickeringTech\Harbour\Variables\DefaultVariableResolver;
@@ -18,11 +18,13 @@ use PickeringTech\Harbour\Variables\ResolvedVariable;
 use PickeringTech\Harbour\Variables\VariableBag;
 use PickeringTech\Harbour\Variables\VariableResolutionContext;
 
-final readonly class VariablePipeline
+final class VariablePipeline
 {
+    private ?string $cachedTemplate = null;
+
     public function __construct(
         private string $workspacePath,
-        private ConfigRepository $config,
+        private HarbourConfig $config,
         private Container $container,
         private EnvironmentTemplate $templates,
         private EnvironmentFile $environmentFile,
@@ -58,30 +60,14 @@ final readonly class VariablePipeline
             $bag->put($variable);
         }
 
-        $configured = $this->config->get('harbour.variables', []);
-        if (is_array($configured)) {
-            foreach ($configured as $name => $definition) {
-                if (! is_string($name)) {
-                    continue;
-                }
-                if (is_array($definition)) {
-                    $value = $definition['value'] ?? '';
-                    if (! is_scalar($value)) {
-                        throw new HarbourException(ErrorCode::InvalidConfiguration, "Configured variable [{$name}] must be scalar.");
-                    }
-                    $bag->put(new ResolvedVariable($name, (string) $value, 'project_configuration', ($definition['secret'] ?? false) === true));
-                } elseif (is_scalar($definition)) {
-                    $bag->put(new ResolvedVariable($name, (string) $definition, 'project_configuration'));
-                }
-            }
+        $configured = $this->config->variables;
+        foreach ($configured as $name => $definition) {
+            $bag->put(new ResolvedVariable($name, $definition['value'], 'project_configuration', $definition['secret']));
         }
 
-        $resolvers = $this->config->get('harbour.resolvers', []);
-        if (is_array($resolvers)) {
+        $resolvers = $this->config->resolvers;
+        if ($includeProcessEnvironment && $resolvers !== []) {
             foreach ($resolvers as $resolverClass) {
-                if (! is_string($resolverClass)) {
-                    continue;
-                }
                 $resolver = $this->container->make($resolverClass);
                 if (! $resolver instanceof WorkspaceVariableResolver) {
                     throw new HarbourException(ErrorCode::InvalidConfiguration, "Variable resolver [{$resolverClass}] does not implement the contract.");
@@ -109,7 +95,11 @@ final readonly class VariablePipeline
 
     public function templateContents(): string
     {
-        $configured = $this->configuredString('harbour.template', '.env.harbour');
+        if ($this->cachedTemplate !== null) {
+            return $this->cachedTemplate;
+        }
+
+        $configured = $this->config->template;
         $path = str_starts_with($configured, '/') ? $configured : $this->workspacePath.'/'.$configured;
         $root = realpath($this->workspacePath);
         $resolved = realpath($path);
@@ -124,23 +114,18 @@ final readonly class VariablePipeline
             throw new HarbourException(ErrorCode::InvalidConfiguration, "Unable to read Harbour environment template [{$path}].");
         }
 
-        return $contents;
+        return $this->cachedTemplate = $contents;
+    }
+
+    public function beginOperation(): void
+    {
+        $this->cachedTemplate = null;
     }
 
     public function projectName(): string
     {
-        $configured = $this->config->get('harbour.project_name');
+        $configured = $this->config->projectName;
 
         return is_string($configured) && trim($configured) !== '' ? $configured : basename($this->workspacePath);
-    }
-
-    private function configuredString(string $key, string $default = ''): string
-    {
-        $value = $this->config->get($key, $default);
-        if (! is_string($value)) {
-            throw new HarbourException(ErrorCode::InvalidConfiguration, "Configuration [{$key}] must be a string.");
-        }
-
-        return $value;
     }
 }

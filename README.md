@@ -62,13 +62,16 @@ should set up the first workspace and start those managed components now.
 Harbour creates `.env.harbour` and `config/harbour.php`, safely appends its state
 paths to `.gitignore`, and adds Composer workspace aliases when those names are
 free. Compose mode also creates `docker-compose.harbour.yml`. Existing project
-files and scripts are never replaced. If those protected files prevent a
-different selection, the installer prints the exact paths to remove before
-rerunning it.
+files and scripts are never replaced by default. `--reconfigure` replaces only
+files carrying Harbour's generated-file marker; project-authored files,
+`.gitignore`, and Composer scripts keep their non-destructive rules. Without
+that flag, the installer prints the exact protected paths to remove.
 
 Harbour reads Sail and Herd configuration; it does not silently start, rewrite,
 or take ownership of either tool. It configures native Laravel processes to use
 their published host ports and shared services safely.
+The accepted proposal names the host/port prerequisites that must already be
+listening. Detection never silently changes shared infrastructure into Compose.
 
 For deterministic agent or CI installation, accept discovery without prompts:
 
@@ -111,6 +114,8 @@ composer workspace:setup
 its isolated database and Laravel namespaces, preserves and renders `.env`,
 runs normal migrations, and starts only explicitly configured optional Docker
 resources.
+Configured seeding runs on first setup and after `--fresh`, not on every
+convergent setup; pass `--seed` when an intentional repeat is required.
 
 Inspect it:
 
@@ -137,13 +142,16 @@ safety.
 | `workspace:setup` | Create or reconcile this checkout's isolated environment. |
 | `workspace:status` | Read its concise persisted status without scanning the machine. |
 | `workspace:env` | Emit table, JSON, dotenv, or safely escaped shell variables. |
-| `workspace:render` | Re-render `.env` from the current state and template. |
+| `workspace:render` | Re-render `.env` from current state without clobbering hand edits. |
 | `workspace:debug` | Explain variable provenance while redacting secrets. |
 | `workspace:teardown` | Remove proven-owned resources and restore `.env`. |
 
 Commands intended for automation support stable JSON output and `HARBOUR_`-
 prefixed error codes. Non-interactive fresh setup and teardown require
 `--force`; that flag never weakens ownership checks.
+
+Setup and render also checksum the current Harbour-rendered `.env`. If it was
+edited, move durable values into `.env.harbour` or pass `--force` to replace it.
 
 ## Environment template
 

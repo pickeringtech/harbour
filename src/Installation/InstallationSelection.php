@@ -10,37 +10,6 @@ use PickeringTech\Harbour\Exceptions\HarbourException;
 final readonly class InstallationSelection
 {
     /** @var list<string> */
-    public const SAIL_SERVICES = [
-        'mysql',
-        'pgsql',
-        'mariadb',
-        'mongodb',
-        'redis',
-        'valkey',
-        'memcached',
-        'meilisearch',
-        'typesense',
-        'minio',
-        'rustfs',
-        'mailpit',
-        'rabbitmq',
-        'selenium',
-        'soketi',
-    ];
-
-    /** @var list<string> */
-    public const DATABASES = ['none', 'sqlite', 'mysql', 'mariadb', 'pgsql', 'mongodb'];
-
-    /** @var list<string> */
-    public const CACHES = ['none', 'file', 'database', 'redis', 'valkey', 'memcached'];
-
-    /** @var list<string> */
-    public const MAILERS = ['none', 'log', 'mailpit'];
-
-    /** @var list<string> */
-    public const ADDITIONAL_SERVICES = ['meilisearch', 'typesense', 'minio', 'rustfs', 'rabbitmq', 'selenium', 'soketi'];
-
-    /** @var list<string> */
     public const PROVIDERS = ['shared', 'compose'];
 
     /** @param list<string> $additionalServices */
@@ -51,19 +20,19 @@ final readonly class InstallationSelection
         public array $additionalServices = [],
         public string $provider = 'shared',
     ) {
-        if (! in_array($database, self::DATABASES, true)) {
-            throw self::invalid('database', $database, self::DATABASES);
+        if (! in_array($database, self::databases(), true)) {
+            throw self::invalid('database', $database, self::databases());
         }
-        if (! in_array($cache, self::CACHES, true)) {
-            throw self::invalid('cache', $cache, self::CACHES);
+        if (! in_array($cache, self::caches(), true)) {
+            throw self::invalid('cache', $cache, self::caches());
         }
-        if (! in_array($mail, self::MAILERS, true)) {
-            throw self::invalid('mail', $mail, self::MAILERS);
+        if (! in_array($mail, self::mailers(), true)) {
+            throw self::invalid('mail', $mail, self::mailers());
         }
 
         foreach ($additionalServices as $service) {
-            if (! in_array($service, self::ADDITIONAL_SERVICES, true)) {
-                throw self::invalid('additional service', $service, self::ADDITIONAL_SERVICES);
+            if (! in_array($service, self::additionalServices(), true)) {
+                throw self::invalid('additional service', $service, self::additionalServices());
             }
         }
         if (! in_array($provider, self::PROVIDERS, true)) {
@@ -80,17 +49,18 @@ final readonly class InstallationSelection
     public static function fromOptions(?string $database, ?string $cache, ?string $mail, ?string $with, ?string $provider = null): self
     {
         $withServices = self::parseWith($with);
-        $withDatabase = self::onlyOne($withServices, ['mysql', 'pgsql', 'mariadb', 'mongodb'], 'database');
-        $withCache = self::onlyOne($withServices, ['redis', 'valkey', 'memcached'], 'cache service');
-        $withMail = self::onlyOne($withServices, ['mailpit'], 'mail service');
+        $catalog = new InstallationServiceCatalog;
+        $withDatabase = self::onlyOne($withServices, $catalog->namesFor('database'), 'database');
+        $withCache = self::onlyOne($withServices, $catalog->namesFor('cache'), 'cache service');
+        $withMail = self::onlyOne($withServices, $catalog->namesFor('mail'), 'mail service');
 
-        $selectedDatabase = self::normalize($database, 'database', self::DATABASES, ['postgres' => 'pgsql', 'postgresql' => 'pgsql'])
+        $selectedDatabase = self::normalize($database, 'database', self::databases(), $catalog)
             ?? $withDatabase
             ?? 'none';
-        $selectedCache = self::normalize($cache, 'cache', self::CACHES, ['memcache' => 'memcached'])
+        $selectedCache = self::normalize($cache, 'cache', self::caches(), $catalog)
             ?? $withCache
             ?? 'none';
-        $selectedMail = self::normalize($mail, 'mail', self::MAILERS)
+        $selectedMail = self::normalize($mail, 'mail', self::mailers(), $catalog)
             ?? $withMail
             ?? 'none';
 
@@ -98,7 +68,7 @@ final readonly class InstallationSelection
         self::assertCompatible('cache', $selectedCache, $withCache);
         self::assertCompatible('mail', $selectedMail, $withMail);
 
-        $additional = array_values(array_intersect($withServices, self::ADDITIONAL_SERVICES));
+        $additional = array_values(array_intersect($withServices, self::additionalServices()));
 
         $selectedProvider = self::normalize($provider, 'infrastructure provider', self::PROVIDERS) ?? 'shared';
 
@@ -110,7 +80,7 @@ final readonly class InstallationSelection
     {
         $services = [];
         foreach ([$this->database, $this->cache, $this->mail, ...$this->additionalServices] as $service) {
-            if (in_array($service, self::SAIL_SERVICES, true) && ! in_array($service, $services, true)) {
+            if (in_array($service, (new InstallationServiceCatalog)->names(), true) && ! in_array($service, $services, true)) {
                 $services[] = $service;
             }
         }
@@ -154,13 +124,16 @@ final readonly class InstallationSelection
         if (in_array('', $services, true) || in_array('none', $services, true)) {
             throw new HarbourException(ErrorCode::InvalidInstallSelection, 'The --with value "none" cannot be combined with services.');
         }
+        $normalizedServices = [];
         foreach ($services as $service) {
-            if (! in_array($service, self::SAIL_SERVICES, true)) {
-                throw self::invalid('service', $service, self::SAIL_SERVICES);
+            $service = (new InstallationServiceCatalog)->normalize($service);
+            if (! in_array($service, (new InstallationServiceCatalog)->names(), true)) {
+                throw self::invalid('service', $service, (new InstallationServiceCatalog)->names());
             }
+            $normalizedServices[] = $service;
         }
 
-        return array_values(array_unique($services));
+        return array_values(array_unique($normalizedServices));
     }
 
     /**
@@ -182,16 +155,15 @@ final readonly class InstallationSelection
 
     /**
      * @param  list<string>  $allowed
-     * @param  array<string, string>  $aliases
      */
-    private static function normalize(?string $value, string $group, array $allowed, array $aliases = []): ?string
+    private static function normalize(?string $value, string $group, array $allowed, ?InstallationServiceCatalog $catalog = null): ?string
     {
         if ($value === null) {
             return null;
         }
 
         $normalized = strtolower(trim($value));
-        $normalized = $aliases[$normalized] ?? $normalized;
+        $normalized = $catalog?->normalize($normalized) ?? $normalized;
         if (! in_array($normalized, $allowed, true)) {
             throw self::invalid($group, $value, $allowed);
         }
@@ -216,5 +188,29 @@ final readonly class InstallationSelection
             ErrorCode::InvalidInstallSelection,
             "Unsupported {$group} [{$value}]. Choose one of: ".implode(', ', $allowed).'.',
         );
+    }
+
+    /** @return list<string> */
+    public static function databases(): array
+    {
+        return ['none', 'sqlite', ...(new InstallationServiceCatalog)->namesFor('database')];
+    }
+
+    /** @return list<string> */
+    public static function caches(): array
+    {
+        return ['none', 'file', 'database', ...(new InstallationServiceCatalog)->namesFor('cache')];
+    }
+
+    /** @return list<string> */
+    public static function mailers(): array
+    {
+        return ['none', 'log', ...(new InstallationServiceCatalog)->namesFor('mail')];
+    }
+
+    /** @return list<string> */
+    public static function additionalServices(): array
+    {
+        return (new InstallationServiceCatalog)->namesFor('additional');
     }
 }

@@ -6,5 +6,6 @@ namespace PickeringTech\Harbour\Contracts;
 
 interface InstalledWorkspaceStarter
 {
-    public function start(): string;
+    /** @param null|callable(string, string): void $output */
+    public function start(?callable $output = null): string;
 }

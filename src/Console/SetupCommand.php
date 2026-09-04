@@ -4,86 +4,50 @@ declare(strict_types=1);
 
 namespace PickeringTech\Harbour\Console;
 
-use Illuminate\Contracts\Config\Repository;
-use PickeringTech\Harbour\Exceptions\ErrorCode;
-use PickeringTech\Harbour\Exceptions\HarbourException;
-use PickeringTech\Harbour\Workspace;
+use PickeringTech\Harbour\HarbourConfig;
 use PickeringTech\Harbour\WorkspaceManager;
 
 final class SetupCommand extends WorkspaceCommand
 {
-    protected $signature = 'workspace:setup {--fresh : Recreate only Harbour-owned resources} {--force : Do not ask for confirmation} {--json : Emit stable JSON}';
+    protected $signature = 'workspace:setup {--fresh : Recreate only Harbour-owned resources} {--force : Do not prompt and replace a modified rendered .env; safety guards remain active} {--seed : Run the configured database seeder even when the workspace is already ready} {--stream : Stream managed service process output (used by the human installer)} {--json : Emit stable JSON}';
 
     protected $description = 'Set up an isolated Harbour workspace';
 
-    public function handle(WorkspaceManager $manager, Repository $config): int
+    public function handle(WorkspaceManager $manager, HarbourConfig $config): int
     {
         $json = (bool) $this->option('json');
 
         return $this->executeSafely($json, function () use ($manager, $config, $json): int {
             $fresh = (bool) $this->option('fresh');
-            if ($fresh && ! $this->option('force') && ! $this->confirm('Recreate Harbour-owned workspace resources?')) {
-                if (! $this->input->isInteractive()) {
-                    throw new HarbourException(
-                        ErrorCode::UnsafeOperation,
-                        'Non-interactive fresh setup requires --force.',
-                    );
-                }
-                $this->components->warn('Fresh setup aborted; no resources were changed.');
-
+            if ($fresh && ! $this->confirmForcedOperation(
+                (bool) $this->option('force'),
+                'Recreate Harbour-owned workspace resources?',
+                'Non-interactive fresh setup requires --force.',
+                'Fresh setup aborted; no resources were changed.',
+            )) {
                 return self::SUCCESS;
             }
 
-            if (! $json && is_array($config->get('harbour.compose')) && $config->get('harbour.compose') !== []) {
+            if (! $json && $config->compose !== []) {
                 $this->components->info('Starting managed Compose projects; images will be pulled when missing.');
             }
 
-            $workspace = $manager->setup($fresh);
+            $output = (bool) $this->option('stream')
+                ? fn (string $type, string $buffer) => $this->output->write($buffer)
+                : null;
+            $workspace = $manager->setup($fresh, (bool) $this->option('force'), (bool) $this->option('seed'), $output);
 
             if ($json) {
                 $this->line((string) json_encode(['version' => 1, 'ok' => true, 'workspace' => $workspace->toArray()], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
             } else {
                 $this->components->info('Harbour is ready.');
-                $this->displayWorkspace($workspace);
+                $this->displayWorkspace($workspace->toArray());
                 foreach ($workspace->warnings() as $warning) {
                     $this->components->warn($warning);
-                }
-                $appPort = $workspace->ports()['APP_PORT'] ?? null;
-                if (is_int($appPort)) {
-                    $this->line("Start Laravel with <comment>php artisan serve --host=127.0.0.1 --port={$appPort}</comment>.");
                 }
             }
 
             return self::SUCCESS;
         });
-    }
-
-    private function displayWorkspace(Workspace $workspace): void
-    {
-        $data = $workspace->toArray();
-        $rows = [
-            ['Workspace', $data['slug']],
-            ['Application', $data['application_url'] ?? '—'],
-        ];
-        foreach ($workspace->ports() as $name => $port) {
-            if ($name !== 'APP_PORT') {
-                $rows[] = [str_replace('_PORT', '', $name), (string) $port];
-            }
-        }
-        if ($data['database'] !== null) {
-            $rows[] = ['Database', $data['database']];
-        }
-        $resources = $data['resources'] ?? [];
-        if (is_array($resources)) {
-            foreach ($resources as $resource) {
-                $project = is_array($resource) && is_array($resource['metadata'] ?? null)
-                    ? ($resource['metadata']['project_name'] ?? null)
-                    : null;
-                if (is_array($resource) && ($resource['type'] ?? null) === 'compose_project' && is_string($project)) {
-                    $rows[] = ['Compose project', $project];
-                }
-            }
-        }
-        $this->table([], $rows);
     }
 }
