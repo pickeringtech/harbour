@@ -23,5 +23,4 @@ no human signing key is stored in Actions. Immutable releases are checked before
 writes and releases are drafted before publication. Tag creation protection is
 separate from update/deletion protection because GitHub grants bypass per
 ruleset: the App may bypass only the creation ruleset, while only the owner has
-emergency bypass over historical mutation rules through a closed, visible,
-one-member organization team.
+emergency bypass over historical mutation rules through a direct user bypass.

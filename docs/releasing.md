@@ -88,7 +88,8 @@ repository permissions `Contents: write`, `Checks: read`, and
 short-lived installation token to those permissions. `Administration: read`
 is used only to confirm immutable releases before a write.
 
-Create a `release` environment without a manual approval rule. Store:
+Create a `release` environment without a manual approval rule and restrict its
+deployment branches to `main`. Store:
 
 - environment variable `RELEASE_APP_CLIENT_ID`;
 - environment secret `RELEASE_APP_PRIVATE_KEY`.
@@ -111,22 +112,20 @@ revokes them after each job.
 ## Tag rulesets and one-time proof
 
 GitHub bypass applies to an entire ruleset, not one rule within it. To let the
-App create but never update/delete `refs/tags/v*`, first create a closed/visible
-(not secret) `release-emergency` organization team whose only member is
-`rpickz`, then use two active tag rulesets:
+App create but never update/delete `refs/tags/v*`, use two active repository
+tag rulesets:
 
 1. `Protect release tag history`: target `refs/tags/v*`, restrict update and
-   deletion, and grant an always-allow bypass only to `release-emergency`.
+   deletion, and grant an always-allow bypass only to the GitHub user `rpickz`.
 2. `Restrict release tag creation`: target `refs/tags/v*`, restrict creation,
-   and grant always-allow bypass only to `release-emergency` and the dedicated
+   and grant always-allow bypass only to `rpickz` and the dedicated
    release App. Do not grant repository roles, administrators, writers, or the
    generic GitHub Actions integration.
 
-Repository rulesets owned by an organization accept roles, teams, and Apps as
-bypass actors, not an individual member, and secret teams are not eligible.
-Keep the emergency team owner-managed and single-member so it implements the
-intended `rpickz`-only human exception without granting every organization
-owner or repository admin bypass.
+The repository-ruleset API accepts a specific user as a bypass actor even when
+the repository belongs to an organization. Use the `User` actor for `rpickz`;
+do not substitute the organization-owner or repository-administrator role,
+which would silently broaden emergency access.
 
 Keep immutable releases enabled. GitHub documents both
 [creation restrictions and App-specific bypass](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository#granting-bypass-permissions-for-your-branch-or-tag-ruleset).
@@ -137,6 +136,14 @@ both rulesets in a disposable repository with the same three actors and prove:
 - a normal writer cannot create, update, or delete a matching tag;
 - `rpickz` can create and remove a disposable probe tag for emergency recovery;
 - the App can create a new matching tag but cannot update or delete it.
+
+Run `composer release:policy-test` against that disposable repository once per
+actor. Set `HARBOUR_RELEASE_POLICY_INTEGRATION=1`, the actor name
+(`non-bypass`, `owner`, or `release-app`), its short-lived token, two exact
+commit IDs, and unique create/history probe tags through the corresponding
+`HARBOUR_RELEASE_POLICY_*` variables. The test refuses non-`v*` probe names and
+records no token values. Use the owner identity to remove the App-created probe
+after the denial assertions have been recorded.
 
 Then enable the creation ruleset here and run a declaration through review.
 The reconciler's create-ref call is the production confirmation that the App

@@ -78,7 +78,8 @@
         "format:check": "pint --test",
         "mutate": "@php -d memory_limit=512M vendor/bin/infection --threads=max",
         "release:validate": "@php tools/release.php validate",
-        "release:reconcile": "@php tools/release.php reconcile"
+        "release:reconcile": "@php tools/release.php reconcile",
+        "release:policy-test": "phpunit tests/Integration/ReleasePolicyIntegrationTest.php"
     },
     "minimum-stability": "stable",
     "prefer-stable": true
