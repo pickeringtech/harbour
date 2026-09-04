@@ -6,6 +6,8 @@ All notable changes will be documented here. The format follows
 
 ## [Unreleased]
 
+## [0.0.4] - 2026-09-04
+
 ### Added
 
 - Releases are now reconciled from a reviewed append-only manifest into
@@ -131,7 +133,8 @@ All notable changes will be documented here. The format follows
 - A full two-worktree Laravel acceptance job covering PostgreSQL, Redis cache,
   locks, queues, Docker, Compose, independent teardown, and failure recovery.
 
-[Unreleased]: https://github.com/pickeringtech/harbour/compare/v0.0.3...HEAD
+[Unreleased]: https://github.com/pickeringtech/harbour/compare/v0.0.4...HEAD
+[0.0.4]: https://github.com/pickeringtech/harbour/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/pickeringtech/harbour/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/pickeringtech/harbour/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/pickeringtech/harbour/releases/tag/v0.0.1
