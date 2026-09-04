@@ -31,7 +31,20 @@ jobs:
       - uses: ramsey/composer-install@65e4f84970763564f46a70b8a54b90d033b3bdda # 4.0.0
       - run: composer audit --locked --no-interaction
       - run: npm ci
-      - run: npm audit --audit-level=high
+      - name: Audit npm dependencies
+        env:
+          NPM_CONFIG_FETCH_TIMEOUT: '60000'
+        run: |
+          for attempt in 1 2 3; do
+            npm audit --audit-level=high && exit 0
+
+            if [ "${attempt}" -eq 3 ]; then
+              exit 1
+            fi
+
+            echo "::warning::npm audit attempt ${attempt} failed; retrying after a transient-error delay."
+            sleep $((attempt * 10))
+          done
 
   security-analysis:
     name: PHP security analysis
