@@ -31,7 +31,20 @@ jobs:
       - uses: ramsey/composer-install@65e4f84970763564f46a70b8a54b90d033b3bdda # 4.0.0
       - run: composer audit --locked --no-interaction
       - run: npm ci
-      - run: npm audit --audit-level=high
+      - name: Audit npm dependencies
+        env:
+          NPM_CONFIG_FETCH_TIMEOUT: '60000'
+        run: |
+          for attempt in 1 2 3; do
+            npm audit --audit-level=high && exit 0
+
+            if [ "${attempt}" -eq 3 ]; then
+              exit 1
+            fi
+
+            echo "::warning::npm audit attempt ${attempt} failed; retrying after a transient-error delay."
+            sleep $((attempt * 10))
+          done
 
   security-analysis:
     name: PHP security analysis
@@ -154,11 +167,11 @@ jobs:
       - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
           php-version: '8.4'
-          extensions: mbstring, pdo_sqlite
+          extensions: mbstring, pdo_sqlite, pdo_pgsql, pdo_mysql
           coverage: none
       - uses: ramsey/composer-install@65e4f84970763564f46a70b8a54b90d033b3bdda # 4.0.0
       - run: docker compose version
-      - run: vendor/bin/phpunit tests/Integration/DockerIntegrationTest.php
+      - run: vendor/bin/phpunit tests/Integration/DockerIntegrationTest.php tests/Integration/GeneratedComposeIntegrationTest.php
 
   coverage:
     name: Coverage
@@ -244,20 +257,22 @@ jobs:
         working-directory: /tmp/harbour-app
       - name: Auto-detect and install Harbour project configuration
         run: |
-          php artisan workspace:install --detect --json | tee /tmp/harbour-install.json
+          sha256sum .env | cut -d ' ' -f 1 > /tmp/harbour-original-env-checksum
+          php artisan workspace:install --detect --start --json | tee /tmp/harbour-install.json
           grep -q '"detected":true' /tmp/harbour-install.json
           grep -q '"database":"sqlite"' /tmp/harbour-install.json
+          grep -q '"started":true' /tmp/harbour-install.json
+          php artisan workspace:status --json | grep -q '"status":"ready"'
         working-directory: /tmp/harbour-app
       - name: Exercise setup and teardown in the fresh application
         working-directory: /tmp/harbour-app
         run: |
-          original_checksum="$(sha256sum .env | cut -d ' ' -f 1)"
           composer validate --strict
           composer workspace:setup
           php artisan workspace:status --json | grep -q '"status":"ready"'
           composer workspace:teardown -- --force
           test ! -e .harbour.json
-          test "$(sha256sum .env | cut -d ' ' -f 1)" = "${original_checksum}"
+          test "$(sha256sum .env | cut -d ' ' -f 1)" = "$(cat /tmp/harbour-original-env-checksum)"
 
   acceptance:
     name: Two-worktree acceptance

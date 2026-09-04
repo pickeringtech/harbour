@@ -41,6 +41,23 @@ final class InstallationSelectionTest extends TestCase
         self::assertSame([], $selection->services());
     }
 
+    public function test_compose_provider_is_recorded_for_service_backed_components(): void
+    {
+        $selection = InstallationSelection::fromOptions('pgsql', 'redis', 'mailpit', 'meilisearch,minio', 'compose');
+
+        self::assertSame('compose', $selection->provider);
+        self::assertSame('compose', $selection->toArray()['provider']);
+        self::assertSame(['pgsql', 'redis', 'mailpit', 'meilisearch', 'minio'], $selection->services());
+    }
+
+    public function test_compose_provider_requires_at_least_one_service_backed_component(): void
+    {
+        $this->expectException(HarbourException::class);
+        $this->expectExceptionMessage('requires at least one service-backed component');
+
+        InstallationSelection::fromOptions('sqlite', 'file', 'log', 'none', 'compose');
+    }
+
     public function test_every_sail_service_is_accepted_by_the_compatible_with_option(): void
     {
         foreach (InstallationSelection::SAIL_SERVICES as $service) {
@@ -82,6 +99,14 @@ final class InstallationSelectionTest extends TestCase
         yield 'cache flag conflict' => [null, 'file', null, 'redis', 'Conflicting cache'];
         yield 'mail flag conflict' => [null, null, 'log', 'mailpit', 'Conflicting mail'];
         yield 'empty item' => [null, null, null, 'redis,', 'cannot be combined'];
+    }
+
+    public function test_unknown_provider_is_rejected(): void
+    {
+        $this->expectException(HarbourException::class);
+        $this->expectExceptionMessage('Unsupported infrastructure provider');
+
+        InstallationSelection::fromOptions('pgsql', 'none', 'none', 'none', 'kubernetes');
     }
 
     public function test_every_base_and_optional_service_combination_renders_unique_environment_keys(): void
@@ -183,6 +208,25 @@ final class InstallationSelectionTest extends TestCase
         self::assertFalse($manual->detected);
         self::assertSame([], $manual->sources);
         self::assertSame(1, $manual->port('pgsql', 1));
+    }
+
+    public function test_switching_a_detected_selection_to_compose_discards_external_endpoints(): void
+    {
+        $initial = new InstallationDiscovery(
+            new InstallationSelection('pgsql', 'redis', 'mailpit'),
+            true,
+            ['sail:compose.yaml'],
+            ['pgsql' => 15432, 'redis' => 16379, 'mailpit' => 11025],
+            ['DB_HOST', 'DB_PORT', 'DB_USERNAME', 'DB_PASSWORD', 'REDIS_HOST', 'REDIS_PORT', 'MAIL_HOST', 'MAIL_PORT'],
+            ['pgsql', 'redis', 'mailpit'],
+        );
+
+        $compose = $initial->withSelection($initial->selection->withProvider('compose'));
+
+        self::assertSame([], $compose->servicePorts);
+        self::assertSame([], $compose->localServices);
+        self::assertFalse($compose->hasEnvironmentVariable('DB_PASSWORD'));
+        self::assertStringContainsString('DB_PORT=${DB_PORT}', (new InstallationFileRenderer)->environment($compose));
     }
 
     public function test_changing_detected_optional_services_discards_their_stale_endpoints_and_credentials(): void

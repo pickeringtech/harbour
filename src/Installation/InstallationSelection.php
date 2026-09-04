@@ -40,12 +40,16 @@ final readonly class InstallationSelection
     /** @var list<string> */
     public const ADDITIONAL_SERVICES = ['meilisearch', 'typesense', 'minio', 'rustfs', 'rabbitmq', 'selenium', 'soketi'];
 
+    /** @var list<string> */
+    public const PROVIDERS = ['shared', 'compose'];
+
     /** @param list<string> $additionalServices */
     public function __construct(
         public string $database,
         public string $cache,
         public string $mail,
         public array $additionalServices = [],
+        public string $provider = 'shared',
     ) {
         if (! in_array($database, self::DATABASES, true)) {
             throw self::invalid('database', $database, self::DATABASES);
@@ -62,9 +66,18 @@ final readonly class InstallationSelection
                 throw self::invalid('additional service', $service, self::ADDITIONAL_SERVICES);
             }
         }
+        if (! in_array($provider, self::PROVIDERS, true)) {
+            throw self::invalid('infrastructure provider', $provider, self::PROVIDERS);
+        }
+        if ($provider === 'compose' && $this->services() === []) {
+            throw new HarbourException(
+                ErrorCode::InvalidInstallSelection,
+                'The Compose provider requires at least one service-backed component.',
+            );
+        }
     }
 
-    public static function fromOptions(?string $database, ?string $cache, ?string $mail, ?string $with): self
+    public static function fromOptions(?string $database, ?string $cache, ?string $mail, ?string $with, ?string $provider = null): self
     {
         $withServices = self::parseWith($with);
         $withDatabase = self::onlyOne($withServices, ['mysql', 'pgsql', 'mariadb', 'mongodb'], 'database');
@@ -87,7 +100,9 @@ final readonly class InstallationSelection
 
         $additional = array_values(array_intersect($withServices, self::ADDITIONAL_SERVICES));
 
-        return new self($selectedDatabase, $selectedCache, $selectedMail, array_values(array_unique($additional)));
+        $selectedProvider = self::normalize($provider, 'infrastructure provider', self::PROVIDERS) ?? 'shared';
+
+        return new self($selectedDatabase, $selectedCache, $selectedMail, array_values(array_unique($additional)), $selectedProvider);
     }
 
     /** @return list<string> */
@@ -103,6 +118,11 @@ final readonly class InstallationSelection
         return $services;
     }
 
+    public function withProvider(string $provider): self
+    {
+        return new self($this->database, $this->cache, $this->mail, $this->additionalServices, $provider);
+    }
+
     /** @return array{database: string, cache: string, mail: string, services: list<string>, provider: string} */
     public function toArray(): array
     {
@@ -111,7 +131,7 @@ final readonly class InstallationSelection
             'cache' => $this->cache,
             'mail' => $this->mail,
             'services' => $this->services(),
-            'provider' => 'shared',
+            'provider' => $this->provider,
         ];
     }
 

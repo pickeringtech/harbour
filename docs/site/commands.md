@@ -10,7 +10,14 @@ php artisan workspace:install
 
 Purpose: interactively select the project's infrastructure and perform the one-time, non-destructive scaffolding required before Harbour can be used consistently across worktrees. Existing configuration and scripts are preserved.
 
-With no options, the command first discovers Sail, Compose, Herd, and Laravel environment configuration and offers one proposal. Use `--detect` to accept that proposal without interaction.
+With no options, a TUI first asks whether to auto-detect the existing project or
+choose components manually. Manual mode uses single-select controls for the
+database, cache, and mail transport, and a multi-select control for additional
+services. When service processes are needed it can generate Docker Compose, and
+it can set up the first workspace immediately.
+
+Use `--detect` to accept the discovered Sail, Compose, Herd, and Laravel
+configuration without interaction.
 
 For deterministic automation:
 
@@ -21,6 +28,8 @@ php artisan workspace:install \
     -c redis \
     -m mailpit \
     --with=meilisearch,minio \
+    --compose \
+    --start \
     --no-interaction
 ```
 
@@ -33,6 +42,9 @@ Options:
 | `-c`, `--cache` | `none`, `file`, `database`, `redis`, `valkey`, `memcached` | Configure cache plus safe session/queue defaults. |
 | `-m`, `--mail` | `none`, `log`, `mailpit` | Configure local mail delivery. |
 | `--with` | Comma-separated Sail service names or `none` | Add search, object storage, RabbitMQ, Selenium, Soketi, or express the entire selection with Sail vocabulary. |
+| `--provider` | `shared`, `compose` | Use existing host/shared services or generate a workspace-specific Compose stack. |
+| `--compose` | — | Shorthand for `--provider=compose`. Generates `docker-compose.harbour.yml`. |
+| `--start` | — | Run `workspace:setup` after files are installed and wait for managed services to become ready. |
 | `--json` | — | Return the selected stack, discovery sources, and file changes using the stable JSON envelope. Use `--detect` or explicit selections. |
 
 The full Sail-compatible service list is `mysql`, `pgsql`, `mariadb`,
@@ -41,6 +53,11 @@ The full Sail-compatible service list is `mysql`, `pgsql`, `mariadb`,
 
 Conflicting choices—such as `--database=sqlite --with=mysql` or
 `--with=redis,valkey`—fail before project files are written.
+
+`--compose` and `--provider=shared` conflict deliberately. Compose mode also
+requires at least one service-backed component; a SQLite/file/log selection has
+nothing to containerize. Starting is a normal Harbour setup operation, so all
+port, ownership, state, and teardown guarantees still apply.
 
 ## `workspace:setup`
 

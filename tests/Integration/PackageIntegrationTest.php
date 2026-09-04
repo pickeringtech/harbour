@@ -31,6 +31,9 @@ final class PackageIntegrationTest extends TestCase
         self::assertSame('d', $definition->getOption('database')->getShortcut());
         self::assertSame('c', $definition->getOption('cache')->getShortcut());
         self::assertSame('m', $definition->getOption('mail')->getShortcut());
+        self::assertTrue($definition->hasOption('provider'));
+        self::assertTrue($definition->hasOption('compose'));
+        self::assertTrue($definition->hasOption('start'));
     }
 
     public function test_setup_generates_a_redacted_application_key_when_a_new_worktree_has_none(): void

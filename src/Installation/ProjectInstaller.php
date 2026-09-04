@@ -23,6 +23,7 @@ final readonly class ProjectInstaller
         private string $workspacePath,
         private AtomicFile $files = new AtomicFile,
         private InstallationFileRenderer $renderer = new InstallationFileRenderer,
+        private InstallationComposeRenderer $compose = new InstallationComposeRenderer,
     ) {}
 
     public function install(InstallationSelection|InstallationDiscovery $installation): InstallationResult
@@ -37,6 +38,9 @@ final readonly class ProjectInstaller
 
         $this->writeIfMissing('.env.harbour', $this->renderer->environment($discovery), $created, $unchanged);
         $this->writeIfMissing('config/harbour.php', $this->renderer->configuration($discovery), $created, $unchanged);
+        if ($discovery->selection->provider === 'compose') {
+            $this->writeIfMissing('docker-compose.harbour.yml', $this->compose->render($discovery->selection), $created, $unchanged);
+        }
         $this->updateGitignore($updated, $unchanged);
         $this->updateComposer($updated, $unchanged, $conflicts);
 

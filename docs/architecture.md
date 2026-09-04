@@ -26,7 +26,7 @@ Harbour supports three service modes:
   logical namespace, such as a database or Redis prefix;
 - **docker**: Harbour creates a labelled, workspace-specific container;
 - **compose**: Harbour starts a uniquely named Compose project from a project
-  supplied Compose file.
+  supplied or installer-generated Compose file.
 
 None of these modes puts PHP, Node, Vite, Reverb, Horizon, or queue workers
 under Harbour supervision.
@@ -56,8 +56,9 @@ already removed, while mismatched ownership evidence is an error.
 3. Resolve Git/path identity and safe context-specific identifiers.
 4. Reserve configured ports through the global registry and persist each one.
 5. Resolve non-resource variables and prepare the original `.env` snapshot.
-6. Create the database and persist its ownership record immediately.
-7. Start configured Docker and Compose resources, persisting each resource.
+6. Start configured Docker and Compose resources, persisting ownership before
+   each external start and waiting for Compose readiness.
+7. Create the logical database and persist its ownership record immediately.
 8. Resolve the complete variable set and atomically render `.env`.
 9. Run normal migrations, optional seeding, hooks, and Laravel events.
 10. Validate the result and write `ready`.
@@ -66,8 +67,8 @@ already removed, while mismatched ownership evidence is an error.
 
 1. Acquire the same lifecycle lock and load the recorded state.
 2. Run the before-teardown event and configured hooks.
-3. Remove Compose and Docker resources after external ownership verification.
-4. Remove the database after driver-specific ownership and safety checks.
+3. Remove the database after driver-specific ownership and safety checks.
+4. Remove Compose and Docker resources after external ownership verification.
 5. Restore `.env` only if its rendered checksum still matches Harbour state.
 6. Release recorded port reservations owned by this workspace.
 7. Run the after-teardown hooks/event and atomically remove local state.

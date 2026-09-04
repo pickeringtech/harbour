@@ -45,6 +45,16 @@ final readonly class InstallationDiscovery
         $ports = $this->servicePorts;
         $variables = $this->environmentVariables;
 
+        if ($selection->provider !== $this->selection->provider) {
+            $ports = [];
+            $variables = $this->withoutVariables($variables, [
+                'DB_HOST', 'DB_PORT', 'DB_USERNAME', 'DB_PASSWORD', 'MONGODB_URI', 'MONGODB_PORT',
+                'REDIS_HOST', 'REDIS_PORT', 'REDIS_PASSWORD', 'MEMCACHED_HOST', 'MEMCACHED_PORT',
+                'MAIL_HOST', 'MAIL_PORT', 'MAIL_USERNAME', 'MAIL_PASSWORD', 'MAILPIT_URL',
+                ...array_merge(...array_map(self::serviceVariables(...), InstallationSelection::ADDITIONAL_SERVICES)),
+            ]);
+        }
+
         if ($selection->database !== $this->selection->database) {
             $this->removePorts($ports, ['mysql', 'mariadb', 'pgsql', 'mongodb']);
             $variables = $this->withoutVariables($variables, ['DB_HOST', 'DB_PORT', 'DB_USERNAME', 'DB_PASSWORD', 'MONGODB_URI', 'MONGODB_PORT']);
@@ -68,10 +78,12 @@ final readonly class InstallationDiscovery
         }
 
         $selectedServices = $selection->services();
-        $localServices = array_values(array_filter(
-            $this->localServices,
-            static fn (string $service): bool => in_array($service, $selectedServices, true),
-        ));
+        $localServices = $selection->provider !== $this->selection->provider
+            ? []
+            : array_values(array_filter(
+                $this->localServices,
+                static fn (string $service): bool => in_array($service, $selectedServices, true),
+            ));
 
         return new self($selection, $this->detected, $this->sources, $ports, $variables, $localServices);
     }

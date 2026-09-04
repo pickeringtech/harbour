@@ -25,9 +25,11 @@ composer require --dev pickeringtech/harbour
 php artisan workspace:install
 ```
 
-The install command detects Sail, Compose, Herd, and Laravel environment choices,
-shows one proposal, and generates configuration only after approval. With no
-existing infrastructure it offers a zero-dependency SQLite/file/log setup.
+The install command first asks whether to detect Sail, Compose, Herd, and Laravel
+environment choices or let you choose components manually. Manual mode uses a
+multi-select for optional services and can generate and start a workspace-owned
+Docker Compose stack. With no existing infrastructure, detection offers a
+zero-dependency SQLite/file/log setup.
 
 After those generated project files are reviewed and committed, every developer or agent uses:
 

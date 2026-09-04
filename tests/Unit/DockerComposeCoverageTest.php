@@ -95,8 +95,13 @@ final class DockerComposeCoverageTest extends TestCase
         }
         self::assertFileExists($snapshot);
 
-        $start = new ComposeManager(new ScenarioCommandRunner([new ProcessResult(7, '', 'up failed')]), new ContextIdentifier);
+        $startRunner = new ScenarioCommandRunner([new ProcessResult(7, '', 'up failed')]);
+        $start = new ComposeManager($startRunner, new ContextIdentifier);
         $this->assertHarbourCode(ErrorCode::ComposeStartFailed, fn () => $start->start($resource, $this->directory, ['APP_PORT' => '8000']));
+        self::assertSame(
+            ['up', '--detach', '--wait', '--wait-timeout', '60'],
+            array_slice($startRunner->commands[0] ?? [], -5),
+        );
 
         $inspect = new ComposeManager(new ScenarioCommandRunner([new ProcessResult(2, '')]), new ContextIdentifier);
         $this->assertHarbourCode(ErrorCode::ProcessFailed, fn () => $inspect->destroy($resource, $this->directory));
@@ -113,12 +118,15 @@ final class DockerComposeCoverageTest extends TestCase
         ]), new ContextIdentifier);
         $this->assertHarbourCode(ErrorCode::ProcessFailed, fn () => $down->destroy($resource, $this->directory));
 
-        $successful = new ComposeManager(new ScenarioCommandRunner([
+        $successfulRunner = new ScenarioCommandRunner([
             new ProcessResult(0, ''),
             new ProcessResult(0, ''),
-        ]), new ContextIdentifier);
-        $successful->destroy($resource, $this->directory);
+        ]);
+        $successful = new ComposeManager($successfulRunner, new ContextIdentifier);
+        $successful->destroy($resource, $this->directory, ['APP_PORT' => '8123']);
         self::assertFileDoesNotExist($snapshot);
+        self::assertSame(['APP_PORT' => '8123'], $successfulRunner->environments[0] ?? null);
+        self::assertSame(['APP_PORT' => '8123'], $successfulRunner->environments[1] ?? null);
 
         $invalid = new OwnedResource('compose_'.str_repeat('d', 32), 'ws_test', 'compose_project', 'compose', []);
         $this->assertHarbourCode(ErrorCode::DockerResourceNotOwned, fn () => $manager->start($invalid, $this->directory, []));
@@ -160,11 +168,20 @@ final class DockerComposeCoverageTest extends TestCase
 
 final class ScenarioCommandRunner implements CommandRunner
 {
+    /** @var list<list<string>> */
+    public array $commands = [];
+
+    /** @var list<array<string, string>> */
+    public array $environments = [];
+
     /** @param list<ProcessResult> $results */
     public function __construct(private array $results = []) {}
 
     public function run(array $command, string $workingDirectory, array $environment = []): ProcessResult
     {
+        $this->commands[] = $command;
+        $this->environments[] = $environment;
+
         return array_shift($this->results) ?? new ProcessResult(0, 'ok');
     }
 }
