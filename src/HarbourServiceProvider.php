@@ -17,6 +17,7 @@ use PickeringTech\Harbour\Console\SetupCommand;
 use PickeringTech\Harbour\Console\StatusCommand;
 use PickeringTech\Harbour\Console\TeardownCommand;
 use PickeringTech\Harbour\Contracts\CommandRunner;
+use PickeringTech\Harbour\Contracts\InstallationPreflight;
 use PickeringTech\Harbour\Contracts\InstalledWorkspaceStarter;
 use PickeringTech\Harbour\Contracts\PortAllocationStrategy;
 use PickeringTech\Harbour\Contracts\WorkspaceIdentityStrategy;
@@ -38,6 +39,7 @@ use PickeringTech\Harbour\Identity\DefaultWorkspaceIdentityStrategy;
 use PickeringTech\Harbour\Installation\ArtisanWorkspaceStarter;
 use PickeringTech\Harbour\Installation\ProjectConfigurationDetector;
 use PickeringTech\Harbour\Installation\ProjectInstaller;
+use PickeringTech\Harbour\Installation\SystemInstallationPreflight;
 use PickeringTech\Harbour\Lifecycle\DatabaseLifecycle;
 use PickeringTech\Harbour\Lifecycle\ManagedInfrastructure;
 use PickeringTech\Harbour\Lifecycle\SetupSequence;
@@ -90,6 +92,11 @@ final class HarbourServiceProvider extends ServiceProvider
         $this->app->singleton(EnvironmentManager::class, fn (Application $app): EnvironmentManager => new EnvironmentManager($this->workspacePath($app)));
         $this->app->singleton(ProjectInstaller::class, fn (Application $app): ProjectInstaller => new ProjectInstaller($this->workspacePath($app)));
         $this->app->singleton(ProjectConfigurationDetector::class, fn (Application $app): ProjectConfigurationDetector => new ProjectConfigurationDetector($this->workspacePath($app)));
+        $this->app->singleton(InstallationPreflight::class, fn (Application $app): InstallationPreflight => new SystemInstallationPreflight(
+            $app->make(ConfigRepository::class),
+            $app->make(CommandRunner::class),
+            $this->workspacePath($app),
+        ));
         $this->app->singleton(InstalledWorkspaceStarter::class, fn (Application $app): InstalledWorkspaceStarter => new ArtisanWorkspaceStarter(
             $this->workspacePath($app),
             $app->make(CommandRunner::class),

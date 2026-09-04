@@ -7,7 +7,9 @@ namespace PickeringTech\Harbour\Tests;
 use Illuminate\Foundation\Application;
 use LogicException;
 use Orchestra\Testbench\TestCase as Orchestra;
+use PickeringTech\Harbour\Contracts\InstallationPreflight;
 use PickeringTech\Harbour\HarbourServiceProvider;
+use PickeringTech\Harbour\Installation\InstallationSelection;
 
 abstract class TestCase extends Orchestra
 {
@@ -20,6 +22,10 @@ abstract class TestCase extends Orchestra
         file_put_contents($this->workspaceDirectory.'/.env.harbour', "APP_URL=\${APP_URL}\nAPP_PORT=\${APP_PORT}\nREDIS_PREFIX=\${REDIS_PREFIX}\nSESSION_COOKIE=\${SESSION_COOKIE}\nVITE_PORT=\${VITE_PORT}\nREVERB_PORT=\${REVERB_PORT}\n");
         file_put_contents($this->workspaceDirectory.'/.env', "ORIGINAL=yes\n");
         parent::setUp();
+        $this->application()->instance(InstallationPreflight::class, new class implements InstallationPreflight
+        {
+            public function assertReady(InstallationSelection $selection): void {}
+        });
     }
 
     protected function tearDown(): void

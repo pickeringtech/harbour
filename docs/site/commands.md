@@ -16,6 +16,12 @@ database, cache, and mail transport, and a multi-select control for additional
 services. When service processes are needed it can generate Docker Compose, and
 it can set up the first workspace immediately.
 
+Once the final stack is known, the installer validates its PHP extensions,
+Laravel client packages, and—when selected—Docker Compose tooling. Missing
+requirements are reported together with their purpose and resolution under the
+stable `HARBOUR_INSTALL_REQUIREMENTS_MISSING` error code. This happens before
+any project file is written.
+
 Use `--detect` to accept the discovered Sail, Compose, Herd, and Laravel
 configuration without interaction.
 

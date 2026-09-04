@@ -96,6 +96,14 @@ first workspace. The manual path can either connect Laravel to shared infrastruc
 a workspace-managed `docker-compose.harbour.yml`. It then asks whether Harbour
 should set up the first workspace and start those managed components now.
 
+After that final selection, Harbour checks the exact runtime requirements for
+the chosen stack before writing anything. For example, PostgreSQL requires
+`pdo_pgsql`, a PhpRedis project requires the `redis` extension, and Compose mode
+requires Docker with the Compose v2 plugin. Optional Laravel integrations are
+checked only when their component is selected. A failure lists every missing
+extension, Composer package, or executable, explains what needs it, and leaves
+the project unchanged.
+
 Harbour creates `.env.harbour` and `config/harbour.php`, safely appends its state
 paths to `.gitignore`, and adds Composer workspace aliases when those names are
 free. Compose mode also creates `docker-compose.harbour.yml`. Existing project
@@ -250,8 +258,10 @@ strict Larastan, formatting, mutation testing, and a 95% coverage minimum.
 
 ## Requirements and non-goals
 
-Harbour supports PHP 8.4+, Laravel 13+, Linux, and macOS. Docker is needed only
-for projects that opt into Docker or Compose resources.
+Harbour supports PHP 8.4+, Laravel 13+, Linux, and macOS. The installer derives
+PHP extensions and Laravel client packages from the stack the user actually
+selects and checks them before creating project files. Docker and the Compose
+v2 plugin are needed only when Compose resources are selected.
 
 Harbour does not create Git worktrees, manage coding agents, install PHP or
 Node, supervise long-running processes, require Docker, replace Compose or

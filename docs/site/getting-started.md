@@ -8,8 +8,12 @@ Harbour has one project-level installation and one repeatable checkout-level set
 - Laravel 13 or newer
 - Composer
 - Linux or macOS
-- the PDO extension for PostgreSQL, MySQL/MariaDB, or SQLite when selected
-- Docker only for explicitly configured Docker or Compose resources
+- the PHP extensions and Laravel client packages required by the components
+  you select
+- Docker with the Compose v2 plugin only when Compose resources are selected
+
+You do not need to determine that list in advance. `workspace:install` derives
+it from the final selected stack and checks it before changing the project.
 
 ## 1. Add the package
 
@@ -42,6 +46,35 @@ existing shared infrastructure or generate an isolated Docker Compose stack.
 It then asks whether to set up this workspace immediately. Choosing yes reserves
 ports, starts managed Compose services, creates the logical database, renders
 `.env`, and runs migrations before the installer returns.
+
+### Selected-stack preflight
+
+Harbour validates requirements only after the user accepts auto-detection or
+finishes manual selection. The proposal itself therefore remains read-only,
+and checks are never based on generic defaults.
+
+The preflight covers the selected SQL or MongoDB driver, the configured Redis
+client, Memcached, client packages for selected Laravel integrations, and the
+Docker CLI plus Compose v2 plugin when Compose was chosen. One failure report
+lists every missing capability, why the selected stack needs it, and the command
+or installation action that resolves it. Harbour exits with
+`HARBOUR_INSTALL_REQUIREMENTS_MISSING` before creating `.env.harbour`, config,
+Compose files, Git ignore entries, or Composer scripts.
+
+| Selected component | Required application capability |
+| --- | --- |
+| SQLite | `pdo_sqlite` |
+| MySQL or MariaDB | `pdo_mysql` |
+| PostgreSQL | `pdo_pgsql` |
+| MongoDB | `mongodb` extension and `mongodb/laravel-mongodb` |
+| Redis or Valkey | The configured `redis` extension or `predis/predis` client |
+| Memcached | `memcached` extension |
+| Meilisearch or Typesense | Laravel Scout and the matching PHP client |
+| MinIO or RustFS | `league/flysystem-aws-s3-v3` |
+| RabbitMQ | `vladimir-yuldashev/laravel-queue-rabbitmq` |
+| Selenium | `laravel/dusk` |
+| Soketi | `pusher/pusher-php-server` |
+| Compose provider | Docker CLI and Docker Compose v2 |
 
 ### Auto-detection
 

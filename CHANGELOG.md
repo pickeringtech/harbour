@@ -12,6 +12,11 @@ All notable changes will be documented here. The format follows
   generated-file marker; project-authored files, `.gitignore`, and Composer
   scripts retain their non-destructive rules.
 - Ready workspaces can opt into another seed run with `workspace:setup --seed`.
+- `workspace:install` now derives runtime requirements from the final selected
+  stack and checks PHP extensions, Laravel client packages, Docker, and Compose
+  before writing project files or starting infrastructure.
+- Missing installation requirements are aggregated into one actionable human
+  report and the stable `HARBOUR_INSTALL_REQUIREMENTS_MISSING` JSON error.
 
 ### Changed
 

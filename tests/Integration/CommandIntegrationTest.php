@@ -9,12 +9,14 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Testing\PendingCommand;
 use PickeringTech\Harbour\Console\InstallCommand;
 use PickeringTech\Harbour\Contracts\CommandRunner;
+use PickeringTech\Harbour\Contracts\InstallationPreflight;
 use PickeringTech\Harbour\Contracts\InstalledWorkspaceStarter;
 use PickeringTech\Harbour\Contracts\WorkspaceIdentityStrategy;
 use PickeringTech\Harbour\Contracts\WorkspaceStateRepository;
 use PickeringTech\Harbour\Docker\ComposeManager;
 use PickeringTech\Harbour\Identity\WorkspaceContext;
 use PickeringTech\Harbour\Identity\WorkspaceIdentity;
+use PickeringTech\Harbour\Installation\SystemInstallationPreflight;
 use PickeringTech\Harbour\Process\ProcessResult;
 use PickeringTech\Harbour\Tests\TestCase;
 use PickeringTech\Harbour\WorkspaceManager;
@@ -87,6 +89,43 @@ final class CommandIntegrationTest extends TestCase
         self::assertSame(1, Artisan::call('workspace:install', ['--json' => true]));
         self::assertStringContainsString('INSTALL_SELECTION_REQUIRED', Artisan::output());
         self::assertFileDoesNotExist($this->workspaceDirectory.'/config/harbour.php');
+    }
+
+    public function test_install_preflight_fails_after_selection_and_before_writing_project_files(): void
+    {
+        unlink($this->workspaceDirectory.'/.env.harbour');
+        file_put_contents($this->workspaceDirectory.'/composer.json', "{\n    \"name\": \"acme/app\"\n}\n");
+        $originalComposer = (string) file_get_contents($this->workspaceDirectory.'/composer.json');
+        $this->application()->instance(InstallationPreflight::class, new SystemInstallationPreflight(
+            $this->application()->make(Repository::class),
+            new SuccessfulCommandRunner,
+            $this->workspaceDirectory,
+            [],
+            [],
+        ));
+
+        $options = [
+            '--database' => 'pgsql',
+            '--cache' => 'file',
+            '--mail' => 'log',
+            '--with' => 'none',
+        ];
+
+        self::assertSame(1, Artisan::call('workspace:install', $options));
+        $humanOutput = Artisan::output();
+        self::assertStringContainsString('Checking selected stack requirements', $humanOutput);
+        self::assertStringContainsString('PHP extension pdo_pgsql', $humanOutput);
+
+        self::assertSame(1, Artisan::call('workspace:install', [...$options, '--json' => true]));
+
+        $output = Artisan::output();
+        self::assertStringContainsString('HARBOUR_INSTALL_REQUIREMENTS_MISSING', $output);
+        self::assertStringContainsString('extension:pdo_pgsql', $output);
+        self::assertFileDoesNotExist($this->workspaceDirectory.'/.env.harbour');
+        self::assertFileDoesNotExist($this->workspaceDirectory.'/config/harbour.php');
+        self::assertFileDoesNotExist($this->workspaceDirectory.'/docker-compose.harbour.yml');
+        self::assertFileDoesNotExist($this->workspaceDirectory.'/.gitignore');
+        self::assertSame($originalComposer, file_get_contents($this->workspaceDirectory.'/composer.json'));
     }
 
     public function test_detect_option_accepts_sail_configuration_without_prompts(): void

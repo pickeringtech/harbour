@@ -9,7 +9,7 @@ use Throwable;
 
 final class HarbourException extends RuntimeException
 {
-    /** @param array<string, bool|int|float|string|null> $context */
+    /** @param array<string, mixed> $context */
     public function __construct(
         public readonly ErrorCode $errorCode,
         string $message,
@@ -19,7 +19,7 @@ final class HarbourException extends RuntimeException
         parent::__construct($message, 0, $previous);
     }
 
-    /** @return array{code: string, message: string, context: array<string, bool|int|float|string|null>} */
+    /** @return array{code: string, message: string, context: array<string, mixed>} */
     public function toArray(): array
     {
         return [
