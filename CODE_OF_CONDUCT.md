@@ -34,9 +34,22 @@ edit or remove material, lock a discussion, or limit participation. The aim is
 to restore healthy collaboration and protect the people doing the work—not to
 build a bureaucracy around punishment.
 
-Raise a concern privately with the repository maintainers. It will be handled
-discreetly and in good faith. If the concern involves a maintainer, contact a
-different maintainer where possible.
+Report conduct concerns privately rather than opening an issue:
+
+- For a GitHub comment, use its three-dot menu and choose **Report content**.
+  The report is visible to both repository administrators and not to the
+  reported author.
+- For conduct that is not attached to reportable GitHub content, email
+  [Richard Pickering](mailto:richard.pickering@hotmail.co.uk). Include links,
+  screenshots, the impact, and any immediate safety concern.
+- If the concern involves Richard or reporting to a repository administrator
+  would be unsafe, use [GitHub's private abuse
+  report](https://support.github.com/contact/report-abuse) instead.
+
+Reports will be acknowledged within five business days. Maintainers will limit
+access to the report, avoid public disclosure without the reporter's consent,
+and recuse anyone named in it. The maintainer response process is documented in
+[the security and moderation runbook](docs/maintainer-security.md).
 
 Use good judgment. Leave the project and its people better than you found
 them. Then go build something cool.

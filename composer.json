@@ -28,10 +28,11 @@
     "require-dev": {
         "giorgiosironi/eris": "^1.1",
         "infection/infection": "^0.35.4",
-        "laravel/pint": "^1.25",
         "larastan/larastan": "^3.8",
+        "laravel/pint": "^1.25",
         "orchestra/testbench": "^11.2",
-        "phpunit/phpunit": "^12.5"
+        "phpunit/phpunit": "^12.5",
+        "vimeo/psalm": "^6.16"
     },
     "autoload": {
         "psr-4": {
@@ -70,6 +71,7 @@
             "@php tools/check-coverage.php build/coverage.xml 95"
         ],
         "analyse": "phpstan analyse --memory-limit=1G",
+        "security:analyse": "psalm --taint-analysis --no-progress --memory-limit=2G --threads=1 --scan-threads=1",
         "format": "pint",
         "format:check": "pint --test",
         "mutate": "@php -d memory_limit=512M vendor/bin/infection --threads=max"
