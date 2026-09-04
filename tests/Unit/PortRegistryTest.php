@@ -54,6 +54,24 @@ final class PortRegistryTest extends TestCase
         new PortRequirement('APP_PORT', 9000, 8000);
     }
 
+    public function test_a_reused_reservation_is_reallocated_when_its_port_has_been_taken(): void
+    {
+        $registry = new FilePortRegistry($this->directory);
+        $workspace = $this->directory.'/workspace';
+        mkdir($workspace);
+        $requirement = new PortRequirement('APP_PORT', 18100, 18109);
+        $first = $registry->reserve('ws-a', $workspace, $requirement);
+        $socket = stream_socket_server('tcp://127.0.0.1:'.$first->port, $errorCode, $errorMessage);
+        self::assertIsResource($socket, $errorMessage ?? 'Unable to occupy reserved port.');
+
+        try {
+            $second = $registry->reserve('ws-a', $workspace, $requirement);
+            self::assertNotSame($first->port, $second->port);
+        } finally {
+            fclose($socket);
+        }
+    }
+
     public function test_malformed_reservation_fields_are_rejected_before_use(): void
     {
         file_put_contents($this->directory.'/ports.json', json_encode([

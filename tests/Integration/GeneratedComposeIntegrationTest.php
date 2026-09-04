@@ -95,6 +95,70 @@ final class GeneratedComposeIntegrationTest extends TestCase
         self::assertNull($manager->current());
     }
 
+    public function test_generated_compose_wait_reports_a_failed_healthcheck(): void
+    {
+        if (getenv('HARBOUR_DOCKER_INTEGRATION') !== '1') {
+            self::markTestSkipped('Set HARBOUR_DOCKER_INTEGRATION=1 to mutate the local Docker daemon.');
+        }
+
+        $selection = InstallationSelection::fromOptions('none', 'none', 'mailpit', 'none', 'compose');
+        $contents = (new InstallationComposeRenderer)->render($selection);
+        $contents = str_replace(
+            <<<'YAML'
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8025/readyz"]
+      retries: 10
+      timeout: 5s
+YAML,
+            <<<'YAML'
+      test: ["CMD-SHELL", "exit 1"]
+      interval: 100ms
+      start_interval: 100ms
+      start_period: 1ms
+      retries: 1
+      timeout: 1s
+YAML,
+            $contents,
+        );
+        $file = $this->workspaceDirectory.'/docker-compose.harbour.yml';
+        file_put_contents($file, $contents);
+        $project = 'harbour-health-'.bin2hex(random_bytes(4));
+        $runner = new SymfonyCommandRunner;
+        $environment = [
+            'MAIL_PORT' => (string) $this->availablePort(),
+            'MAILPIT_DASHBOARD_PORT' => (string) $this->availablePort(),
+        ];
+        $base = ['docker', 'compose', '--project-name', $project, '--file', $file];
+
+        try {
+            $started = $runner->run([...$base, 'up', '--detach'], $this->workspaceDirectory, $environment);
+            self::assertTrue($started->successful(), $started->errorOutput);
+            $container = $runner->run([...$base, 'ps', '--quiet', 'mailpit'], $this->workspaceDirectory, $environment);
+            self::assertTrue($container->successful(), $container->errorOutput);
+            self::assertNotSame('', $container->output);
+
+            $health = '';
+            $deadline = microtime(true) + 10;
+            do {
+                $inspection = $runner->run(
+                    ['docker', 'inspect', '--format', '{{.State.Health.Status}}', $container->output],
+                    $this->workspaceDirectory,
+                );
+                $health = $inspection->output;
+                if ($health === 'unhealthy') {
+                    break;
+                }
+                usleep(100_000);
+            } while (microtime(true) < $deadline);
+            self::assertSame('unhealthy', $health);
+
+            $result = $runner->run([...$base, 'up', '--detach', '--wait', '--wait-timeout', '5'], $this->workspaceDirectory, $environment);
+            self::assertFalse($result->successful());
+            self::assertNotSame('', $result->errorOutput);
+        } finally {
+            $runner->run([...$base, 'down', '--remove-orphans'], $this->workspaceDirectory, $environment);
+        }
+    }
+
     #[DataProvider('managedDatabases')]
     public function test_generated_database_is_ready_before_harbour_creates_the_workspace_database(
         string $databaseDriver,
@@ -179,5 +243,18 @@ final class GeneratedComposeIntegrationTest extends TestCase
         }
         fclose($socket);
         self::addToAssertionCount(1);
+    }
+
+    private function availablePort(): int
+    {
+        $socket = stream_socket_server('tcp://127.0.0.1:0', $errorCode, $errorMessage);
+        self::assertIsResource($socket, $errorMessage ?? 'Unable to find a free port.');
+        $address = stream_socket_get_name($socket, false);
+        if (! is_string($address) || ($separator = strrchr($address, ':')) === false) {
+            self::fail('Unable to determine the free port.');
+        }
+        fclose($socket);
+
+        return (int) substr($separator, 1);
     }
 }

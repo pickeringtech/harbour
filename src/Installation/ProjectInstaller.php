@@ -44,7 +44,10 @@ final readonly class ProjectInstaller
         $this->updateGitignore($updated, $unchanged);
         $this->updateComposer($updated, $unchanged, $conflicts);
 
-        return new InstallationResult($created, $updated, $unchanged, $conflicts, $discovery->selection, $discovery->metadata());
+        $protected = ['.env.harbour', 'config/harbour.php', 'docker-compose.harbour.yml'];
+        $reconfigure = array_values(array_intersect($unchanged, $protected));
+
+        return new InstallationResult($created, $updated, $unchanged, $conflicts, $discovery->selection, $discovery->metadata(), $reconfigure);
     }
 
     /**
@@ -133,9 +136,11 @@ final readonly class ProjectInstaller
         }
 
         $changed = false;
+        $missingScripts = [];
         foreach (self::COMPOSER_SCRIPTS as $name => $commands) {
             if (! array_key_exists($name, $scripts)) {
                 $scripts[$name] = $commands;
+                $missingScripts[$name] = $commands;
                 $changed = true;
 
                 continue;
@@ -152,14 +157,176 @@ final readonly class ProjectInstaller
             return;
         }
 
-        $manifest['scripts'] = $scripts;
         try {
-            $encoded = json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)."\n";
+            $encoded = $this->insertComposerScripts($contents, $missingScripts, array_key_exists('scripts', $manifest));
         } catch (JsonException $exception) {
             throw new HarbourException(ErrorCode::InvalidConfiguration, 'Unable to encode composer.json.', [], $exception);
         }
         $this->files->write($path, $encoded, 0644);
         $updated[] = 'composer.json';
+    }
+
+    /**
+     * @param  array<string, list<string>>  $scripts
+     *
+     * @throws JsonException
+     */
+    private function insertComposerScripts(string $contents, array $scripts, bool $hasScripts): string
+    {
+        $newline = str_contains($contents, "\r\n") ? "\r\n" : "\n";
+
+        if ($hasScripts) {
+            $open = $this->objectPropertyOpen($contents, 'scripts');
+            if ($open === null) {
+                throw new JsonException('Unable to locate composer.json scripts object.');
+            }
+            $close = $this->matchingBrace($contents, $open);
+            $lineStart = strrpos(substr($contents, 0, $close), "\n");
+            $closingIndent = substr($contents, ($lineStart === false ? -1 : $lineStart) + 1, $close - (($lineStart === false ? -1 : $lineStart) + 1));
+            $body = substr($contents, $open + 1, $close - $open - 1);
+
+            if (str_contains($body, "\n")) {
+                $memberIndent = $closingIndent.'    ';
+                $members = $this->scriptMembers($scripts, $memberIndent, $newline);
+                $replacement = rtrim($body);
+                if (trim($replacement) !== '') {
+                    $replacement .= ',';
+                }
+                $replacement .= $newline.$members.$newline.$closingIndent;
+            } else {
+                $members = $this->scriptMembers($scripts, '', '');
+                $replacement = $body.(trim($body) === '' ? '' : ',').$members;
+            }
+
+            return substr($contents, 0, $open + 1).$replacement.substr($contents, $close);
+        }
+
+        $trimmedEnd = rtrim($contents);
+        $close = strlen($trimmedEnd) - 1;
+        if ($close < 0 || $trimmedEnd[$close] !== '}') {
+            throw new JsonException('Unable to locate composer.json root object.');
+        }
+        $suffix = substr($contents, strlen($trimmedEnd));
+        $body = substr($trimmedEnd, 1, $close - 1);
+
+        if (str_contains($body, "\n")) {
+            preg_match('/(?:^|\R)([ \t]+)"/', $body, $indentMatch);
+            $propertyIndent = is_string($indentMatch[1] ?? null) ? $indentMatch[1] : '    ';
+            $members = $this->scriptMembers($scripts, $propertyIndent.'    ', $newline);
+            $property = $propertyIndent.'"scripts": {'.$newline.$members.$newline.$propertyIndent.'}';
+            $replacement = rtrim($body);
+            if (trim($replacement) !== '') {
+                $replacement .= ',';
+            }
+            $replacement .= $newline.$property.$newline;
+
+            return '{'.$replacement.'}'.$suffix;
+        }
+
+        $members = $this->scriptMembers($scripts, '', '');
+
+        return '{'.$body.(trim($body) === '' ? '' : ',').'"scripts":{'.$members.'}}'.$suffix;
+    }
+
+    /** @throws JsonException */
+    private function objectPropertyOpen(string $contents, string $property): ?int
+    {
+        $depth = 0;
+        $length = strlen($contents);
+
+        for ($index = 0; $index < $length; $index++) {
+            $character = $contents[$index];
+            if ($character === '{') {
+                $depth++;
+
+                continue;
+            }
+            if ($character === '}') {
+                $depth--;
+
+                continue;
+            }
+            if ($character !== '"') {
+                continue;
+            }
+
+            $start = $index;
+            $escaped = false;
+            for ($index++; $index < $length; $index++) {
+                $character = $contents[$index];
+                if ($escaped) {
+                    $escaped = false;
+                } elseif ($character === '\\') {
+                    $escaped = true;
+                } elseif ($character === '"') {
+                    break;
+                }
+            }
+
+            if ($depth !== 1 || json_decode(substr($contents, $start, $index - $start + 1), true, flags: JSON_THROW_ON_ERROR) !== $property) {
+                continue;
+            }
+            $cursor = $index + 1;
+            while ($cursor < $length && ctype_space($contents[$cursor])) {
+                $cursor++;
+            }
+            if (($contents[$cursor] ?? null) !== ':') {
+                continue;
+            }
+            for ($cursor++; $cursor < $length && ctype_space($contents[$cursor]); $cursor++) {
+                // Find the start of the property value.
+            }
+
+            return ($contents[$cursor] ?? null) === '{' ? $cursor : null;
+        }
+
+        return null;
+    }
+
+    /** @param array<string, list<string>> $scripts */
+    private function scriptMembers(array $scripts, string $indent, string $newline): string
+    {
+        $members = [];
+        foreach ($scripts as $name => $commands) {
+            $members[] = $indent
+                .json_encode($name, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)
+                .($indent === '' ? ':' : ': ')
+                .json_encode($commands, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+        }
+
+        return implode(','.$newline, $members);
+    }
+
+    private function matchingBrace(string $contents, int $open): int
+    {
+        $depth = 0;
+        $inString = false;
+        $escaped = false;
+        $length = strlen($contents);
+
+        for ($index = $open; $index < $length; $index++) {
+            $character = $contents[$index];
+            if ($inString) {
+                if ($escaped) {
+                    $escaped = false;
+                } elseif ($character === '\\') {
+                    $escaped = true;
+                } elseif ($character === '"') {
+                    $inString = false;
+                }
+
+                continue;
+            }
+            if ($character === '"') {
+                $inString = true;
+            } elseif ($character === '{') {
+                $depth++;
+            } elseif ($character === '}' && --$depth === 0) {
+                return $index;
+            }
+        }
+
+        throw new JsonException('Unable to locate composer.json scripts object boundary.');
     }
 
     private function target(string $relative): string

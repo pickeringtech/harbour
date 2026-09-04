@@ -15,7 +15,7 @@ use PickeringTech\Harbour\Identity\WorkspaceIdentity;
 use PickeringTech\Harbour\Process\ProcessResult;
 use PickeringTech\Harbour\State\OwnedResource;
 
-final class DockerComposeCoverageTest extends TestCase
+final class ManagedInfrastructureTest extends TestCase
 {
     private string $directory;
 
@@ -40,7 +40,8 @@ final class DockerComposeCoverageTest extends TestCase
         $this->assertHarbourCode(ErrorCode::InvalidConfiguration, fn () => $manager->create($resource, $this->directory, ['image' => 'image', 'environment' => 'bad'], []));
 
         $failing = new DockerManager(new ScenarioCommandRunner([new ProcessResult(9, '', 'failed')]), new ContextIdentifier);
-        $this->assertHarbourCode(ErrorCode::ProcessFailed, fn () => $failing->create($resource, $this->directory, ['image' => 'image'], []));
+        $exception = $this->assertHarbourCode(ErrorCode::ProcessFailed, fn () => $failing->create($resource, $this->directory, ['image' => 'image'], []));
+        self::assertSame('failed', $exception->context['stderr']);
     }
 
     public function test_docker_start_destroy_and_ownership_failures_are_explicit(): void
@@ -95,9 +96,13 @@ final class DockerComposeCoverageTest extends TestCase
         }
         self::assertFileExists($snapshot);
 
-        $startRunner = new ScenarioCommandRunner([new ProcessResult(7, '', 'up failed')]);
+        $startRunner = new ScenarioCommandRunner([new ProcessResult(7, '', 'up failed password=compose-secret')]);
         $start = new ComposeManager($startRunner, new ContextIdentifier);
-        $this->assertHarbourCode(ErrorCode::ComposeStartFailed, fn () => $start->start($resource, $this->directory, ['APP_PORT' => '8000']));
+        $exception = $this->assertHarbourCode(ErrorCode::ComposeStartFailed, fn () => $start->start($resource, $this->directory, [
+            'APP_PORT' => '8000',
+            'DB_PASSWORD' => 'compose-secret',
+        ]));
+        self::assertSame('up failed password=[REDACTED]', $exception->context['stderr']);
         self::assertSame(
             ['up', '--detach', '--wait', '--wait-timeout', '60'],
             array_slice($startRunner->commands[0] ?? [], -5),
@@ -133,13 +138,15 @@ final class DockerComposeCoverageTest extends TestCase
     }
 
     /** @param callable(): mixed $operation */
-    private function assertHarbourCode(ErrorCode $code, callable $operation): void
+    private function assertHarbourCode(ErrorCode $code, callable $operation): HarbourException
     {
         try {
             $operation();
             self::fail("Expected {$code->value}.");
         } catch (HarbourException $exception) {
             self::assertSame($code, $exception->errorCode);
+
+            return $exception;
         }
     }
 

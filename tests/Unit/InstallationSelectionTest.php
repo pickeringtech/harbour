@@ -153,6 +153,7 @@ final class InstallationSelectionTest extends TestCase
         $environment = $renderer->environment($discovery);
 
         self::assertStringContainsString("'connection' => 'pgsql'", $configuration);
+        self::assertStringContainsString("in_array(env('APP_ENV'), ['local', 'testing'], true)", $configuration);
         self::assertStringContainsString("'rabbitmq' => [", $configuration);
         self::assertStringContainsString("'driver' => 'shared'", $configuration);
         self::assertStringContainsString('DB_DATABASE=${DB_DATABASE}', $environment);
@@ -175,7 +176,9 @@ final class InstallationSelectionTest extends TestCase
         $discovery = InstallationDiscovery::explicit($selection);
 
         self::assertStringContainsString("'enabled' => false", $renderer->configuration($discovery));
+        self::assertStringContainsString('Harbour never creates,', $renderer->configuration($discovery));
         self::assertStringContainsString('MONGODB_DATABASE=${MONGODB_DATABASE}', $renderer->environment($discovery));
+        self::assertStringContainsString('APP_PORT=${APP_PORT}', $renderer->environment($discovery));
     }
 
     public function test_discovery_can_preserve_or_clear_provenance_when_a_selection_changes(): void

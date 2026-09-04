@@ -44,6 +44,7 @@ final class DockerManagerTest extends TestCase
             'service' => 'search',
             'container_id' => 'container-id',
             'container_name' => 'search-test-a1b2c3d4-4aed2a46',
+            'creation_pending' => false,
         ], $resource->metadata);
         self::assertSame([
             'docker', 'create', '--name', 'search-test-a1b2c3d4-4aed2a46',

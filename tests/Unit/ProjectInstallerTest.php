@@ -58,6 +58,7 @@ final class ProjectInstallerTest extends TestCase
         self::assertSame([], $second->created);
         self::assertSame([], $second->updated);
         self::assertEqualsCanonicalizing(['.env.harbour', 'config/harbour.php', '.gitignore', 'composer.json'], $second->unchanged);
+        self::assertSame(['.env.harbour', 'config/harbour.php'], $second->reconfigure);
     }
 
     public function test_it_preserves_existing_files_and_composer_scripts(): void
@@ -174,6 +175,43 @@ final class ProjectInstallerTest extends TestCase
         $this->expectException(HarbourException::class);
         $this->expectExceptionMessage('scripts must be a JSON object');
         (new ProjectInstaller($this->workspace))->install(self::selection());
+    }
+
+    public function test_it_inserts_scripts_without_reformatting_the_composer_manifest(): void
+    {
+        $manifest = "{\r\n\t\"name\": \"acme/app\",\r\n\t\"scripts\": {\r\n\t\t\"test\": \"phpunit\"\r\n\t},\r\n\t\"extra\": {\"kept\":true}\r\n}\r\n";
+        file_put_contents($this->workspace.'/composer.json', $manifest);
+
+        (new ProjectInstaller($this->workspace))->install(self::selection());
+
+        $updated = (string) file_get_contents($this->workspace.'/composer.json');
+        self::assertStringContainsString("\t\"name\": \"acme/app\"", $updated);
+        self::assertStringContainsString("\t\"extra\": {\"kept\":true}", $updated);
+        self::assertStringContainsString("\t\t\"test\": \"phpunit\",", $updated);
+        self::assertStringNotContainsString("\n    \"name\"", $updated);
+        self::assertSame(0, preg_match('/(?<!\r)\n/', $updated));
+    }
+
+    public function test_it_preserves_compact_json_and_finds_only_the_top_level_scripts_property(): void
+    {
+        $manifest = json_encode([
+            'extra' => ['scripts' => ['nested' => 'keep}']],
+            'scripts' => ['test' => 'say "{ok}"'],
+        ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+        file_put_contents($this->workspace.'/composer.json', $manifest);
+
+        (new ProjectInstaller($this->workspace))->install(self::selection());
+
+        $updated = (string) file_get_contents($this->workspace.'/composer.json');
+        self::assertStringStartsWith('{"extra":{"scripts":{"nested":"keep}"}},"scripts":{"test":"say \\"{ok}\\"",', $updated);
+        self::assertStringNotContainsString("\n", $updated);
+        $decoded = json_decode($updated, true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($decoded);
+        $extra = $decoded['extra'] ?? null;
+        self::assertIsArray($extra);
+        $nestedScripts = $extra['scripts'] ?? null;
+        self::assertIsArray($nestedScripts);
+        self::assertSame('keep}', $nestedScripts['nested'] ?? null);
     }
 
     /** @return array<string, mixed> */

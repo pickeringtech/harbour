@@ -34,9 +34,17 @@ final class FilePortRegistry
             ));
             foreach ($registry['reservations'] as $index => $reservation) {
                 if ($reservation['workspace_id'] === $workspaceId && $reservation['name'] === $requirement->name) {
-                    $registry['reservations'][$index]['workspace_path'] = $workspacePath;
+                    if ($this->isAvailable($reservation['host'], $reservation['port'])) {
+                        $registry['reservations'][$index]['workspace_path'] = $workspacePath;
 
-                    return [$registry, new PortAllocation($requirement->name, $reservation['port'], $workspaceId, $reservation['host'])];
+                        return [$registry, new PortAllocation($requirement->name, $reservation['port'], $workspaceId, $reservation['host'])];
+                    }
+
+                    // The reservation outlived its bind availability. Discard it
+                    // under the same lock and select another port in range.
+                    unset($registry['reservations'][$index]);
+                    $registry['reservations'] = array_values($registry['reservations']);
+                    break;
                 }
             }
 

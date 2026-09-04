@@ -51,6 +51,9 @@ final class InstallCommand extends WorkspaceCommand
                 if ($json) {
                     $startOutput = $starter->start();
                 } else {
+                    if ($selection->provider === 'compose') {
+                        $this->components->info('Starting managed Compose services; images will be pulled when missing.');
+                    }
                     $this->components->task('Setting up this workspace', function () use ($starter, &$startOutput): void {
                         $startOutput = $starter->start();
                     });
@@ -58,11 +61,15 @@ final class InstallCommand extends WorkspaceCommand
             }
 
             if ($json) {
-                $this->line((string) json_encode([
+                $payload = [
                     'version' => 1,
                     'ok' => true,
                     'installation' => [...$result->toArray(), 'started' => $plan->start],
-                ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+                ];
+                if ($startOutput !== '') {
+                    $payload['workspace'] = $this->startedWorkspace($startOutput);
+                }
+                $this->line((string) json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
 
                 return self::SUCCESS;
             }
@@ -86,13 +93,16 @@ final class InstallCommand extends WorkspaceCommand
             foreach ($result->unchanged as $path) {
                 $this->components->twoColumnDetail($path, '<fg=gray>already configured</>');
             }
+            foreach ($result->reconfigure as $path) {
+                $this->components->warn("To change the installation selection, delete {$path} and rerun workspace:install; Harbour will never overwrite it.");
+            }
             foreach ($result->conflicts as $path) {
                 $this->components->warn("Kept existing {$path}; Harbour never replaces a project-defined script.");
             }
             $this->newLine();
             if ($plan->start) {
                 if ($startOutput !== '') {
-                    $this->line($startOutput);
+                    $this->displayStartedWorkspace($this->startedWorkspace($startOutput));
                 }
                 $this->line('The project policy is ready and this workspace is running.');
             } else {
@@ -160,7 +170,7 @@ final class InstallCommand extends WorkspaceCommand
                 : 'Use this zero-dependency setup?';
 
             if (confirm($question, true)) {
-                return new InstallationPlan($discovery, $start);
+                return new InstallationPlan($discovery, $this->confirmStart($discovery->selection, $start));
             }
         } elseif ($mode === 'manual') {
             $discovery = $detector->discover();
@@ -169,18 +179,18 @@ final class InstallCommand extends WorkspaceCommand
         }
 
         $databaseChoice = select(
-            label: 'Which database should Harbour isolate?',
+            label: 'Which database connection should Laravel use?',
             options: [
                 'none' => 'None',
                 'sqlite' => 'SQLite',
                 'mysql' => 'MySQL',
                 'mariadb' => 'MariaDB',
                 'pgsql' => 'PostgreSQL',
-                'mongodb' => 'MongoDB',
+                'mongodb' => 'MongoDB (connection only; database is not owned)',
             ],
             default: $discovery->selection->database,
             scroll: count(InstallationSelection::DATABASES),
-            hint: 'SQLite needs no external service.',
+            hint: 'SQL databases are isolated; MongoDB is connection-only.',
         );
         $cacheChoice = select(
             label: 'Which cache and shared-state store should Laravel use?',
@@ -246,18 +256,73 @@ final class InstallCommand extends WorkspaceCommand
             }
         }
 
+        return new InstallationPlan($discovery->withManualSelection($selection), $this->confirmStart($selection, $start));
+    }
+
+    private function confirmStart(InstallationSelection $selection, bool $start): bool
+    {
+        if ($start) {
+            return true;
+        }
+
         $startLabel = $selection->provider === 'compose'
             ? 'Start these Docker Compose components and set up this workspace now?'
             : 'Set up this workspace now?';
-        $startNow = $start || confirm(
+
+        return confirm(
             label: $startLabel,
             default: $selection->provider === 'compose',
             hint: $selection->provider === 'compose'
                 ? 'Harbour will wait until the services are ready.'
                 : 'You can always run composer workspace:setup later.',
         );
+    }
 
-        return new InstallationPlan($discovery->withManualSelection($selection), $startNow);
+    /** @return array<string, mixed> */
+    private function startedWorkspace(string $output): array
+    {
+        $payload = json_decode($output, true);
+        $workspace = is_array($payload) ? ($payload['workspace'] ?? null) : null;
+        if (! is_array($workspace) || ($payload['ok'] ?? null) !== true) {
+            throw new HarbourException(
+                ErrorCode::ProcessFailed,
+                'Harbour setup completed without a valid workspace status payload. Run composer workspace:status to inspect it.',
+            );
+        }
+
+        /** @var array<string, mixed> $workspace */
+        return $workspace;
+    }
+
+    /** @param array<string, mixed> $workspace */
+    private function displayStartedWorkspace(array $workspace): void
+    {
+        $slug = $workspace['slug'] ?? null;
+        $url = $workspace['application_url'] ?? null;
+        if (is_string($slug)) {
+            $this->components->twoColumnDetail('Workspace', $slug);
+        }
+        if (is_string($url)) {
+            $this->components->twoColumnDetail('Application', $url);
+        }
+
+        $resources = $workspace['resources'] ?? [];
+        if (is_array($resources)) {
+            foreach ($resources as $resource) {
+                $project = is_array($resource) && is_array($resource['metadata'] ?? null)
+                    ? ($resource['metadata']['project_name'] ?? null)
+                    : null;
+                if (is_array($resource) && ($resource['type'] ?? null) === 'compose_project' && is_string($project)) {
+                    $this->components->twoColumnDetail('Compose project', $project);
+                }
+            }
+        }
+
+        $ports = $workspace['ports'] ?? [];
+        $appPort = is_array($ports) ? ($ports['APP_PORT'] ?? null) : null;
+        if (is_int($appPort)) {
+            $this->line("Start Laravel with <comment>php artisan serve --host=127.0.0.1 --port={$appPort}</comment>.");
+        }
     }
 
     private function showProposal(InstallationDiscovery $discovery): void

@@ -6,6 +6,8 @@ namespace PickeringTech\Harbour\Hooks;
 
 use PickeringTech\Harbour\Exceptions\ErrorCode;
 use PickeringTech\Harbour\Exceptions\HarbourException;
+use PickeringTech\Harbour\Process\ProcessFailure;
+use PickeringTech\Harbour\Process\ProcessResult;
 use Symfony\Component\Process\Process;
 
 final class LifecycleHookRunner
@@ -27,7 +29,14 @@ final class LifecycleHookRunner
                 throw new HarbourException(
                     ErrorCode::ProcessFailed,
                     "Lifecycle hook failed during [{$stage}] with exit code {$process->getExitCode()}.",
-                    ['stage' => $stage, 'exit_code' => $process->getExitCode()],
+                    [
+                        'stage' => $stage,
+                        ...ProcessFailure::context(new ProcessResult(
+                            $process->getExitCode() ?? 1,
+                            $process->getOutput(),
+                            $process->getErrorOutput(),
+                        ), $environment),
+                    ],
                 );
             }
         }

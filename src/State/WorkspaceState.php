@@ -72,6 +72,11 @@ final readonly class WorkspaceState
         return $this->copy(status: 'ready', errorCode: null);
     }
 
+    public function preparing(): self
+    {
+        return $this->copy(status: 'preparing');
+    }
+
     public function failed(string $errorCode): self
     {
         return $this->copy(status: 'failed', errorCode: $errorCode);
@@ -220,7 +225,7 @@ final readonly class WorkspaceState
         ?array $resources = null,
         ?array $variables = null,
         ?array $environment = null,
-        ?string $errorCode = null,
+        string|false|null $errorCode = false,
     ): self {
         return new self(
             $this->version,
@@ -231,7 +236,7 @@ final readonly class WorkspaceState
             $resources ?? $this->resources,
             $variables ?? $this->variables,
             $environment ?? $this->environment,
-            $errorCode,
+            $errorCode === false ? $this->errorCode : $errorCode,
         );
     }
 }

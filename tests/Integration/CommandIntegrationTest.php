@@ -8,10 +8,14 @@ use Illuminate\Contracts\Config\Repository;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Testing\PendingCommand;
 use PickeringTech\Harbour\Console\InstallCommand;
+use PickeringTech\Harbour\Contracts\CommandRunner;
 use PickeringTech\Harbour\Contracts\InstalledWorkspaceStarter;
 use PickeringTech\Harbour\Contracts\WorkspaceIdentityStrategy;
+use PickeringTech\Harbour\Contracts\WorkspaceStateRepository;
+use PickeringTech\Harbour\Docker\ComposeManager;
 use PickeringTech\Harbour\Identity\WorkspaceContext;
 use PickeringTech\Harbour\Identity\WorkspaceIdentity;
+use PickeringTech\Harbour\Process\ProcessResult;
 use PickeringTech\Harbour\Tests\TestCase;
 use PickeringTech\Harbour\WorkspaceManager;
 use RuntimeException;
@@ -138,12 +142,13 @@ final class CommandIntegrationTest extends TestCase
         $command = $this->application()->make(InstallCommand::class);
         $command->setLaravel($this->application());
         $tester = new CommandTester($command);
-        $tester->setInputs(['Auto-detect from this project', 'yes']);
+        $tester->setInputs(['Auto-detect from this project', 'yes', 'no']);
 
         self::assertSame(0, $tester->execute([]), $tester->getDisplay());
         self::assertStringContainsString('Harbour detected this project configuration.', $tester->getDisplay());
         self::assertStringContainsString('Detected from', $tester->getDisplay());
         self::assertStringContainsString('REDIS_PORT=16379', (string) file_get_contents($this->workspaceDirectory.'/.env.harbour'));
+        self::assertNull($this->application()->make(WorkspaceManager::class)->current());
     }
 
     public function test_interactive_detection_honours_the_start_switch(): void
@@ -160,7 +165,9 @@ final class CommandIntegrationTest extends TestCase
 
         self::assertSame(0, $tester->execute(['--start' => true]), $tester->getDisplay());
         self::assertTrue($starter->started);
-        self::assertStringContainsString('Harbour is ready.', $tester->getDisplay());
+        self::assertStringContainsString('test-workspace', $tester->getDisplay());
+        self::assertStringContainsString('harbour-test-workspace', $tester->getDisplay());
+        self::assertStringContainsString('php artisan serve --host=127.0.0.1 --port=8123', $tester->getDisplay());
     }
 
     public function test_explicit_options_override_only_the_requested_detected_categories(): void
@@ -266,7 +273,9 @@ final class CommandIntegrationTest extends TestCase
         ]));
 
         self::assertTrue($starter->started);
-        self::assertStringContainsString('"started":true', Artisan::output());
+        $output = Artisan::output();
+        self::assertStringContainsString('"started":true', $output);
+        self::assertStringContainsString('"slug":"test-workspace"', $output);
     }
 
     public function test_commands_report_absent_workspace_and_structured_errors(): void
@@ -378,6 +387,73 @@ final class CommandIntegrationTest extends TestCase
         $manager->teardown(true);
     }
 
+    public function test_non_interactive_destructive_commands_require_force(): void
+    {
+        $manager = $this->application()->make(WorkspaceManager::class);
+        $manager->setup();
+
+        self::assertSame(1, Artisan::call('workspace:setup', ['--fresh' => true, '--no-interaction' => true]));
+        self::assertStringContainsString('--force', Artisan::output());
+        self::assertNotNull($manager->current());
+
+        self::assertSame(1, Artisan::call('workspace:teardown', ['--no-interaction' => true]));
+        self::assertStringContainsString('--force', Artisan::output());
+        self::assertNotNull($manager->current());
+
+        $manager->teardown(true);
+    }
+
+    public function test_process_stderr_is_visible_in_human_and_json_failures(): void
+    {
+        file_put_contents($this->workspaceDirectory.'/compose.yml', "services: {}\n");
+        $this->application()->make(Repository::class)->set('harbour.compose', [
+            'test' => ['file' => 'compose.yml'],
+        ]);
+        $this->application()->instance(CommandRunner::class, new CommandFailureRunner);
+        $this->application()->forgetInstance(ComposeManager::class);
+        $this->application()->forgetInstance(WorkspaceManager::class);
+
+        self::assertSame(1, Artisan::call('workspace:setup'));
+        self::assertStringContainsString('compose healthcheck failed', Artisan::output());
+
+        self::assertSame(1, Artisan::call('workspace:setup', ['--json' => true]));
+        $output = Artisan::output();
+        self::assertStringContainsString('"stderr":"compose healthcheck failed"', $output);
+        self::assertStringContainsString('HARBOUR_COMPOSE_START_FAILED', $output);
+
+        $this->application()->make(WorkspaceStateRepository::class)->delete();
+    }
+
+    public function test_setup_names_the_managed_compose_project_while_explaining_image_pulls(): void
+    {
+        file_put_contents($this->workspaceDirectory.'/compose.yml', "services: {}\n");
+        $this->application()->make(Repository::class)->set('harbour.compose', [
+            'test' => ['file' => 'compose.yml'],
+        ]);
+        $this->application()->instance(CommandRunner::class, new SuccessfulCommandRunner);
+        $this->application()->forgetInstance(ComposeManager::class);
+        $this->application()->forgetInstance(WorkspaceManager::class);
+
+        self::assertSame(0, Artisan::call('workspace:setup'));
+        $output = Artisan::output();
+        self::assertStringContainsString('images will be pulled when missing', $output);
+        self::assertStringContainsString('Compose project', $output);
+        self::assertMatchesRegularExpression('/test-[a-z0-9-]+/', $output);
+    }
+
+    public function test_setup_warns_when_configuration_overrides_an_allocated_port(): void
+    {
+        $this->application()->make(Repository::class)->set('harbour.variables.APP_PORT', 19999);
+
+        self::assertSame(0, Artisan::call('workspace:setup'));
+        self::assertStringContainsString('overrides Harbour', Artisan::output());
+
+        self::assertSame(0, Artisan::call('workspace:status', ['--json' => true]));
+        self::assertStringContainsString('"warnings":["Configured variable [APP_PORT]=19999', Artisan::output());
+
+        $this->application()->make(WorkspaceManager::class)->teardown(true);
+    }
+
     public function test_unexpected_command_failures_use_the_stable_error_envelope(): void
     {
         $config = $this->application()->make(Repository::class);
@@ -400,7 +476,23 @@ final class FakeInstalledWorkspaceStarter implements InstalledWorkspaceStarter
     {
         $this->started = true;
 
-        return 'Harbour is ready.';
+        return '{"version":1,"ok":true,"workspace":{"slug":"test-workspace","application_url":"http://127.0.0.1:8123","status":"ready","ports":{"APP_PORT":8123},"resources":[{"type":"compose_project","metadata":{"project_name":"harbour-test-workspace"}}]}}';
+    }
+}
+
+final class CommandFailureRunner implements CommandRunner
+{
+    public function run(array $command, string $workingDirectory, array $environment = []): ProcessResult
+    {
+        return new ProcessResult(1, '', 'compose healthcheck failed');
+    }
+}
+
+final class SuccessfulCommandRunner implements CommandRunner
+{
+    public function run(array $command, string $workingDirectory, array $environment = []): ProcessResult
+    {
+        return new ProcessResult(0, '');
     }
 }
 

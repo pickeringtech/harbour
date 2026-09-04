@@ -9,6 +9,7 @@ use PickeringTech\Harbour\Exceptions\ErrorCode;
 use PickeringTech\Harbour\Exceptions\HarbourException;
 use PickeringTech\Harbour\Identity\ContextIdentifier;
 use PickeringTech\Harbour\Identity\WorkspaceIdentity;
+use PickeringTech\Harbour\Process\ProcessFailure;
 use PickeringTech\Harbour\State\OwnedResource;
 
 final readonly class DockerManager
@@ -31,6 +32,7 @@ final readonly class DockerManager
         return new OwnedResource($resourceId, $workspace->id(), 'docker_container', 'docker', [
             'service' => $name,
             'container_name' => $this->identifiers->docker($workspace, $name),
+            'creation_pending' => true,
         ]);
     }
 
@@ -95,13 +97,14 @@ final readonly class DockerManager
 
         $result = $this->processes->run($command, $workspacePath);
         if (! $result->successful()) {
-            throw new HarbourException(ErrorCode::ProcessFailed, "Unable to create Docker service [{$name}].", ['exit_code' => $result->exitCode]);
+            throw new HarbourException(ErrorCode::ProcessFailed, "Unable to create Docker service [{$name}].", ProcessFailure::context($result, $environment));
         }
 
         return new OwnedResource($resourceId, $resource->workspaceId, 'docker_container', 'docker', [
             'service' => $name,
             'container_id' => $result->output,
             'container_name' => $container,
+            'creation_pending' => false,
         ]);
     }
 
@@ -110,19 +113,19 @@ final readonly class DockerManager
         $this->assertOwned($resource, $workspacePath);
         $result = $this->processes->run(['docker', 'start', $this->containerId($resource)], $workspacePath);
         if (! $result->successful()) {
-            throw new HarbourException(ErrorCode::ProcessFailed, 'Unable to start a Harbour Docker resource.', ['exit_code' => $result->exitCode]);
+            throw new HarbourException(ErrorCode::ProcessFailed, 'Unable to start a Harbour Docker resource.', ProcessFailure::context($result));
         }
     }
 
     public function destroy(OwnedResource $resource, string $workspacePath): void
     {
-        if (! $this->containerExists($resource, $workspacePath)) {
+        if (! $this->exists($resource, $workspacePath)) {
             return;
         }
         $this->assertOwned($resource, $workspacePath);
         $result = $this->processes->run(['docker', 'rm', '--force', $this->containerId($resource)], $workspacePath);
         if (! $result->successful()) {
-            throw new HarbourException(ErrorCode::ProcessFailed, 'Unable to remove a Harbour Docker resource.', ['exit_code' => $result->exitCode]);
+            throw new HarbourException(ErrorCode::ProcessFailed, 'Unable to remove a Harbour Docker resource.', ProcessFailure::context($result));
         }
     }
 
@@ -144,9 +147,26 @@ final readonly class DockerManager
         }
     }
 
-    private function containerExists(OwnedResource $resource, string $workspacePath): bool
+    public function exists(OwnedResource $resource, string $workspacePath): bool
     {
         return $this->processes->run(['docker', 'inspect', $this->containerId($resource)], $workspacePath)->successful();
+    }
+
+    public function creationPending(OwnedResource $resource): bool
+    {
+        return ($resource->metadata['creation_pending'] ?? false) === true;
+    }
+
+    public function confirmCreated(OwnedResource $resource): OwnedResource
+    {
+        return new OwnedResource(
+            $resource->id,
+            $resource->workspaceId,
+            $resource->type,
+            $resource->driver,
+            [...$resource->metadata, 'creation_pending' => false],
+            $resource->createdByHarbour,
+        );
     }
 
     private function containerId(OwnedResource $resource): string

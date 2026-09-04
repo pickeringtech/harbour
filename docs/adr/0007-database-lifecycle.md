@@ -15,3 +15,10 @@ database only when its marker exactly matches the prepared record; every other
 existing database is rejected. This closes the crash window after the marker
 is written without authorizing deletion of an unmarked database. SQLite files
 must resolve beneath the workspace and pre-existing files are never claimed.
+
+The prepared record also carries an explicit pending-creation flag. If setup
+failed before creation completed, retry may call `create()` again with that
+same evidence; this safely handles both an absent database and the crash window
+after its matching marker was written. Once completion is persisted, a missing
+database or marker is treated as lost ownership and is never recreated. Legacy
+records without the flag are treated as completed.

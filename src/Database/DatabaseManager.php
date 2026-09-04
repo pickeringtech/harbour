@@ -21,12 +21,27 @@ final readonly class DatabaseManager
             'database' => $database,
             'connection_fingerprint' => $configuration->fingerprint(),
             'ownership_token' => bin2hex(random_bytes(32)),
+            'creation_pending' => true,
         ]);
     }
 
     public function create(OwnedResource $resource, string $workspacePath, DatabaseConfiguration $configuration): OwnedResource
     {
-        return $this->driver($resource->driver)->create($resource, $workspacePath, $configuration);
+        $created = $this->driver($resource->driver)->create($resource, $workspacePath, $configuration);
+
+        return new OwnedResource(
+            $created->id,
+            $created->workspaceId,
+            $created->type,
+            $created->driver,
+            [...$created->metadata, 'creation_pending' => false],
+            $created->createdByHarbour,
+        );
+    }
+
+    public function creationPending(OwnedResource $resource): bool
+    {
+        return ($resource->metadata['creation_pending'] ?? false) === true;
     }
 
     public function exists(OwnedResource $resource, DatabaseConfiguration $configuration): bool

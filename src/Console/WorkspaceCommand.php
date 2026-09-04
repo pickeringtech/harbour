@@ -29,6 +29,10 @@ abstract class WorkspaceCommand extends Command
                 ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
             } else {
                 $this->components->error($error->getMessage());
+                $stderr = $error->context['stderr'] ?? null;
+                if (is_string($stderr) && $stderr !== '') {
+                    $this->line($stderr);
+                }
                 if ($this->output->isVerbose()) {
                     $this->line('Error code: '.$error->errorCode->value);
                 }

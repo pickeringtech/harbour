@@ -47,6 +47,12 @@ Options:
 | `--start` | — | Run `workspace:setup` after files are installed and wait for managed services to become ready. |
 | `--json` | — | Return the selected stack, discovery sources, and file changes using the stable JSON envelope. Use `--detect` or explicit selections. |
 
+Interactive auto-detection and manual configuration both ask whether to set up
+the first workspace. `--detect` remains non-interactive, and `--start` opts in
+explicitly. A successful `--json --start` response includes the resulting
+top-level `workspace` payload. If protected files already exist, the result
+lists the exact paths that must be removed before reconfiguration.
+
 The full Sail-compatible service list is `mysql`, `pgsql`, `mariadb`,
 `mongodb`, `redis`, `valkey`, `memcached`, `meilisearch`, `typesense`, `minio`,
 `rustfs`, `mailpit`, `rabbitmq`, `selenium`, and `soketi`.
@@ -68,7 +74,10 @@ php artisan workspace:setup --json
 
 Purpose: make the current checkout usable. Setup allocates ports, creates the workspace database, renders `.env`, starts configured Docker/Compose dependencies, and runs migrations.
 
-`--fresh` first tears down only resources proven to belong to this workspace, then builds them again. Add `--force` to suppress the confirmation prompt.
+`--fresh` first tears down only resources proven to belong to this workspace,
+then builds them again. Add `--force` to suppress the confirmation prompt.
+Non-interactive `--fresh` and teardown fail closed without `--force`; an
+interactive “no” is reported as an abort without claiming work completed.
 
 ## `workspace:status`
 

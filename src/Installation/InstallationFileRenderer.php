@@ -64,6 +64,9 @@ final class InstallationFileRenderer
         $exportedCompose = $this->export($compose, 1);
         $enabled = $databaseEnabled ? 'true' : 'false';
         $connection = $databaseConnection === null ? 'null' : "'{$databaseConnection}'";
+        $databaseComment = $selection->database === 'mongodb'
+            ? "// MongoDB is connection-only: Harbour never creates, marks,\n            // migrates, or destroys the selected MongoDB database."
+            : '// SQL lifecycle is guarded by the persisted Harbour ownership marker.';
 
         return <<<PHP
         <?php
@@ -74,7 +77,7 @@ final class InstallationFileRenderer
         use PickeringTech\Harbour\Ports\DefaultPortAllocationStrategy;
 
         return [
-            'enabled' => env('HARBOUR_ENABLED', env('APP_ENV') !== 'production'),
+            'enabled' => env('HARBOUR_ENABLED', in_array(env('APP_ENV'), ['local', 'testing'], true)),
 
             'template' => '.env.harbour',
             'state' => '.harbour.json',
@@ -105,6 +108,7 @@ final class InstallationFileRenderer
                 'hot_file' => env('VITE_HOT_FILE'),
             ],
 
+            {$databaseComment}
             'database' => [
                 'enabled' => {$enabled},
                 'connection' => {$connection},
@@ -121,6 +125,8 @@ final class InstallationFileRenderer
             'compose' => {$exportedCompose},
 
             'hooks' => [
+                // Prefer argv lists, for example [PHP_BINARY, 'artisan', 'about'].
+                // String hooks are supported and intentionally run through a shell.
                 'before_setup' => [],
                 'after_setup' => [],
                 'before_teardown' => [],
@@ -141,6 +147,7 @@ final class InstallationFileRenderer
         APP_KEY=\${APP_KEY}
         APP_DEBUG=true
         APP_URL=\${APP_URL}
+        APP_PORT=\${APP_PORT}
 
         REDIS_PREFIX=\${REDIS_PREFIX}
         CACHE_PREFIX=\${CACHE_PREFIX}

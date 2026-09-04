@@ -91,14 +91,17 @@ Auto-detection understands:
 - Laravel choices and host ports from `.env` and `.env.example`; or
 - SQLite, file-backed state, and log mail when no infrastructure is configured.
 
-The manual path can either connect Laravel to shared infrastructure or generate
+Both the accepted auto-detect path and the manual path ask whether to set up the
+first workspace. The manual path can either connect Laravel to shared infrastructure or generate
 a workspace-managed `docker-compose.harbour.yml`. It then asks whether Harbour
 should set up the first workspace and start those managed components now.
 
 Harbour creates `.env.harbour` and `config/harbour.php`, safely appends its state
 paths to `.gitignore`, and adds Composer workspace aliases when those names are
 free. Compose mode also creates `docker-compose.harbour.yml`. Existing project
-files and scripts are never replaced.
+files and scripts are never replaced. If those protected files prevent a
+different selection, the installer prints the exact paths to remove before
+rerunning it.
 
 Harbour reads Sail and Herd configuration; it does not silently start, rewrite,
 or take ownership of either tool. It configures native Laravel processes to use
@@ -175,7 +178,9 @@ safety.
 | `workspace:debug` | Explain variable provenance while redacting secrets. |
 | `workspace:teardown` | Remove proven-owned resources and restore `.env`. |
 
-Commands intended for automation support stable JSON output and error codes.
+Commands intended for automation support stable JSON output and `HARBOUR_`-
+prefixed error codes. Non-interactive fresh setup and teardown require
+`--force`; that flag never weakens ownership checks.
 
 ## Environment template
 
@@ -188,6 +193,7 @@ APP_NAME=Acme
 APP_ENV=local
 APP_KEY=${APP_KEY}
 APP_URL=${APP_URL}
+APP_PORT=${APP_PORT}
 
 DB_CONNECTION=pgsql
 DB_HOST=127.0.0.1

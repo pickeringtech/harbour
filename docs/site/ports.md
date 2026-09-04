@@ -22,6 +22,11 @@ Allocation happens under a machine-wide `flock`. Harbour records the reservation
 
 Reservations persist across process crashes and are associated with a workspace ID and path. Reconciliation can reclaim an entry whose checkout no longer exists, but never destroys an external resource merely because an entry looks stale.
 
+Setup bind-checks a reused reservation. If another process took the port,
+Harbour allocates and persists a new candidate from the configured range. A
+project `harbour.variables` entry can still override an allocated port variable,
+but setup emits a warning because the override defeats collision avoidance.
+
 Harbour is not a daemon and does not hold every socket open. An unrelated non-Harbour process could claim a reserved port later, so long-running process launchers should enable strict-port behaviour and fail clearly.
 
 Use a custom `PortAllocationStrategy` when a team needs centrally assigned ranges or another local policy. See [Custom strategies](/custom-strategies/).

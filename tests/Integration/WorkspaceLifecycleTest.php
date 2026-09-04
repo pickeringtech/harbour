@@ -27,7 +27,7 @@ use PickeringTech\Harbour\WorkspaceManager;
 use RuntimeException;
 use stdClass;
 
-final class WorkspaceManagerCoverageTest extends TestCase
+final class WorkspaceLifecycleTest extends TestCase
 {
     #[DataProvider('invalidConfigurations')]
     public function test_invalid_configuration_shapes_fail_with_stable_errors(string $case): void

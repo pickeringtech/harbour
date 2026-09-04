@@ -49,7 +49,18 @@ final class InstallationComposeRendererTest extends TestCase
 
             self::assertStringContainsString("  {$service}:\n", $compose, $service);
             self::assertNotSame([], $catalog->portsFor($service), $service);
+            self::assertStringContainsString("    healthcheck:\n", $compose, $service);
+            self::assertDoesNotMatchRegularExpression('/^\s*image:\s*[^\s]*(?::latest|:alpine|latest-|\/[^:\s]+)$/m', $compose, $service);
         }
+    }
+
+    public function test_mongodb_uses_the_pinned_lightweight_official_image(): void
+    {
+        $selection = InstallationSelection::fromOptions('mongodb', 'none', 'none', 'none', 'compose');
+        $compose = (new InstallationComposeRenderer)->render($selection);
+
+        self::assertStringContainsString('image: mongo:8.0', $compose);
+        self::assertStringNotContainsString('mongodb-atlas-local', $compose);
     }
 
     public function test_port_definitions_are_named_unique_and_valid(): void
