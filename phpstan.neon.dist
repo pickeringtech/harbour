@@ -6,5 +6,7 @@ parameters:
     paths:
         - src
         - tests
+        - tools/release
+        - tools/release.php
     tmpDir: .phpstan.cache
     treatPhpDocTypesAsCertain: true

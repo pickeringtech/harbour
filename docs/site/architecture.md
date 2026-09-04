@@ -41,5 +41,6 @@ The repository contains the complete rationale and invariants:
 - [Database lifecycle](https://github.com/pickeringtech/harbour/blob/main/docs/adr/0007-database-lifecycle.md)
 - [Installer-managed Compose](https://github.com/pickeringtech/harbour/blob/main/docs/adr/0010-installer-managed-compose.md)
 - [Safe enablement and pending creation](https://github.com/pickeringtech/harbour/blob/main/docs/adr/0011-safe-enablement-and-pending-creation.md)
+- [Append-only release ledger](https://github.com/pickeringtech/harbour/blob/main/docs/adr/0012-append-only-release-ledger.md)
 
 Read the [full architecture document](https://github.com/pickeringtech/harbour/blob/main/docs/architecture.md) for state schemas, lock ordering, identifier rules, and teardown invariants.

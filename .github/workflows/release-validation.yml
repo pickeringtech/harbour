@@ -1,0 +1,46 @@
+name: Release manifest
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/release-reconciliation.yml'
+      - '.github/workflows/release-validation.yml'
+      - 'composer.json'
+      - 'composer.lock'
+      - 'docs/releasing.md'
+      - 'releases.json'
+      - 'tools/release.php'
+      - 'tools/release/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Append-only release ledger
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      checks: read
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.4'
+          coverage: none
+      - uses: ramsey/composer-install@65e4f84970763564f46a70b8a54b90d033b3bdda # 4.0.0
+      - name: Validate release ledger
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          RELEASE_MAIN_REF: ${{ github.event.pull_request.base.sha }}
+        run: php tools/release.php validate

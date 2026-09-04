@@ -41,7 +41,8 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "PickeringTech\\Harbour\\Tests\\": "tests/"
+            "PickeringTech\\Harbour\\Tests\\": "tests/",
+            "PickeringTech\\Harbour\\Release\\": "tools/release/"
         }
     },
     "extra": {
@@ -74,7 +75,9 @@
         "security:analyse": "psalm --taint-analysis --no-progress --memory-limit=2G --threads=1 --scan-threads=1",
         "format": "pint",
         "format:check": "pint --test",
-        "mutate": "@php -d memory_limit=512M vendor/bin/infection --threads=max"
+        "mutate": "@php -d memory_limit=512M vendor/bin/infection --threads=max",
+        "release:validate": "@php tools/release.php validate",
+        "release:reconcile": "@php tools/release.php reconcile"
     },
     "minimum-stability": "stable",
     "prefer-stable": true

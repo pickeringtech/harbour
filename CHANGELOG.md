@@ -6,6 +6,12 @@ All notable changes will be documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Releases are now reconciled from a reviewed append-only manifest into
+  verified annotated tags, immutable GitHub releases, and checked Packagist
+  mappings without a maintainer's local signing or publication ceremony.
+
 ## [0.0.3] - 2026-09-04
 
 ### Security
