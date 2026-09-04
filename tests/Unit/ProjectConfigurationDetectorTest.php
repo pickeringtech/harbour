@@ -12,6 +12,16 @@ use PickeringTech\Harbour\Installation\ProjectConfigurationDetector;
 
 final class ProjectConfigurationDetectorTest extends TestCase
 {
+    public function test_it_preserves_an_explicit_redis_client_choice(): void
+    {
+        file_put_contents($this->workspace.'/.env', "CACHE_STORE=redis\nREDIS_CLIENT=predis\n");
+
+        $discovery = (new ProjectConfigurationDetector($this->workspace))->discover();
+
+        self::assertSame('redis', $discovery->selection->cache);
+        self::assertSame('predis', $discovery->selection->redisClient);
+    }
+
     private string $workspace;
 
     protected function setUp(): void

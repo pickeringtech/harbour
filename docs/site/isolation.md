@@ -24,13 +24,15 @@ Each workspace receives `REDIS_PREFIX` and `CACHE_PREFIX`. Laravel cache keys an
 
 `QUEUE_NAME`, `REDIS_QUEUE`, `QUEUE_PREFIX`, and `HORIZON_PREFIX` are workspace-specific. Queue workers must start with the rendered workspace environment so they listen to that workspace's queue.
 
-Harbour configures workers; it does not supervise them.
+Harbour configures workers; it does not launch them.
 
 ## Vite
 
 `VITE_PORT` avoids HMR port collisions. Laravel's default `public/hot` file is already inside each checkout, so normal worktrees do not need a custom hot file.
 
-See [Vite and Reverb](/vite-and-reverb/) for process commands and advanced custom hot-file support.
+`composer workspace:dev` launches Laravel and Vite on their allocations. See
+[Vite and Reverb](/vite-and-reverb/) for external launcher commands and advanced
+custom hot-file support.
 
 ## Reverb
 

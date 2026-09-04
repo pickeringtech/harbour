@@ -3,8 +3,9 @@
 # Harbour architecture
 
 Harbour is a Laravel package that turns the current checkout into an isolated
-local workspace. It does not create the checkout and it does not supervise the
-application. The package shares infrastructure where Laravel already supports
+local workspace. It does not create the checkout or run background application
+daemons. Its deliberately small `workspace:dev` adapter can keep Laravel and
+Vite attached to the current terminal. The package shares infrastructure where Laravel already supports
 safe logical isolation, and creates a workspace-owned resource only where that
 is necessary.
 
@@ -35,8 +36,10 @@ Harbour supports three service modes:
 - **compose**: Harbour starts a uniquely named Compose project from a project
   supplied or installer-generated Compose file.
 
-None of these modes puts PHP, Node, Vite, Reverb, Horizon, or queue workers
-under Harbour supervision.
+None of these infrastructure modes containerizes the Laravel application.
+`workspace:dev` launches only native Laravel and Vite processes, keeps them
+attached to the terminal, and stops them together. Reverb, Horizon, queue
+workers, schedulers, and background daemons remain project concerns.
 
 ## Lifecycle
 

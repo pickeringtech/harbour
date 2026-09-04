@@ -13,6 +13,16 @@ final readonly class InstallationRequirement
         public string $resolution,
     ) {}
 
+    public function composerPackage(): ?string
+    {
+        return str_starts_with($this->id, 'package:') ? substr($this->id, 8) : null;
+    }
+
+    public function isDevelopmentDependency(): bool
+    {
+        return $this->composerPackage() === 'laravel/dusk';
+    }
+
     /** @return array{id: string, name: string, purpose: string, resolution: string} */
     public function toArray(): array
     {

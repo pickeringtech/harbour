@@ -6,6 +6,26 @@ All notable changes will be documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `workspace:dev` now performs convergent setup and launches Laravel plus Vite
+  as one foreground session on their allocated ports, installing missing Node
+  dependencies through the lockfile-selected package manager.
+- Interactive installation can launch the application immediately; `--launch`,
+  `--install-dependencies`, and `--redis-client` expose the same controls to
+  deterministic callers.
+
+### Changed
+
+- Redis and Valkey installations default to portable Predis. Auto-detected
+  PhpRedis is retained when available, while explicit PhpRedis remains
+  supported.
+- Missing Laravel integration packages can be installed in one approved
+  Composer operation and are rechecked without repeating component selection.
+- Remaining native PHP requirements now use structured multi-line output,
+  platform-specific guidance, and an exact selection-preserving retry command.
+- Human installer startup no longer prints Harbour's internal setup JSON.
+
 ### Fixed
 
 - Release signing now normalizes CRLF-formatted GitHub secrets and restores a

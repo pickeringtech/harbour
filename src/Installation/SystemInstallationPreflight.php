@@ -23,17 +23,12 @@ final readonly class SystemInstallationPreflight implements InstallationPrefligh
         private string $workspacePath,
         private ?array $extensions = null,
         private ?array $packages = null,
+        private PhpExtensionGuide $extensionGuide = new PhpExtensionGuide,
     ) {}
 
     public function assertReady(InstallationSelection $selection): void
     {
-        $missing = [];
-
-        $this->databaseRequirements($selection, $missing);
-        $this->cacheRequirements($selection, $missing);
-        $this->serviceRequirements($selection, $missing);
-        $this->composeRequirements($selection, $missing);
-        $missing = $this->unique($missing);
+        $missing = $this->requirements($selection);
 
         if ($missing === []) {
             return;
@@ -48,15 +43,28 @@ final readonly class SystemInstallationPreflight implements InstallationPrefligh
             ErrorCode::InstallRequirementsMissing,
             "The selected Harbour stack is missing required runtime capabilities:\n\n"
                 .implode("\n\n", $details)
-                ."\n\nNo project files were changed.",
+                ."\n\nHarbour configuration and workspace resources were not created.",
             [
                 'missing' => array_map(
                     static fn (InstallationRequirement $requirement): array => $requirement->toArray(),
                     $missing,
                 ),
                 'php_binary' => PHP_BINARY,
+                'retry_command' => $this->retryCommand($selection),
             ],
         );
+    }
+
+    public function requirements(InstallationSelection $selection): array
+    {
+        $missing = [];
+
+        $this->databaseRequirements($selection, $missing);
+        $this->cacheRequirements($selection, $missing);
+        $this->serviceRequirements($selection, $missing);
+        $this->composeRequirements($selection, $missing);
+
+        return $this->unique($missing);
     }
 
     /** @param list<InstallationRequirement> $missing */
@@ -89,7 +97,9 @@ final readonly class SystemInstallationPreflight implements InstallationPrefligh
     private function cacheRequirements(InstallationSelection $selection, array &$missing): void
     {
         if (in_array($selection->cache, ['redis', 'valkey'], true)) {
-            $client = $this->config->get('database.redis.client', 'phpredis');
+            $client = $selection->redisClient === 'auto'
+                ? $this->config->get('database.redis.client', 'phpredis')
+                : $selection->redisClient;
             if ($client === 'predis') {
                 $this->requirePackage(
                     'predis/predis',
@@ -190,7 +200,7 @@ final readonly class SystemInstallationPreflight implements InstallationPrefligh
             'extension:'.$extension,
             "PHP extension {$extension}",
             $purpose,
-            "Install and enable {$extension} for the PHP CLI at ".PHP_BINARY.'.',
+            rtrim($this->extensionGuide->resolution($extension), '.').'.',
         );
     }
 
@@ -228,6 +238,25 @@ final readonly class SystemInstallationPreflight implements InstallationPrefligh
             return in_array(strtolower($package), array_map('strtolower', $this->packages), true);
         }
 
+        $installed = $this->workspacePath.'/vendor/composer/installed.json';
+        if (is_file($installed) && ! is_link($installed)) {
+            $contents = file_get_contents($installed);
+            $decoded = is_string($contents) ? json_decode($contents, true) : null;
+            $sets = is_array($decoded) && array_is_list($decoded) ? $decoded : [$decoded];
+            foreach ($sets as $set) {
+                $packages = is_array($set) ? ($set['packages'] ?? null) : null;
+                if (! is_array($packages)) {
+                    continue;
+                }
+                foreach ($packages as $installedPackage) {
+                    $name = is_array($installedPackage) ? ($installedPackage['name'] ?? null) : null;
+                    if (is_string($name) && strtolower($name) === strtolower($package)) {
+                        return true;
+                    }
+                }
+            }
+        }
+
         return class_exists(InstalledVersions::class) && InstalledVersions::isInstalled($package);
     }
 
@@ -243,5 +272,18 @@ final readonly class SystemInstallationPreflight implements InstallationPrefligh
         }
 
         return array_values($unique);
+    }
+
+    private function retryCommand(InstallationSelection $selection): string
+    {
+        $services = $selection->additionalServices === [] ? 'none' : implode(',', $selection->additionalServices);
+
+        return 'php artisan workspace:install'
+            .' --database='.$selection->database
+            .' --cache='.$selection->cache
+            .' --mail='.$selection->mail
+            .' --with='.$services
+            .' --provider='.$selection->provider
+            .' --redis-client='.$selection->redisClient;
     }
 }

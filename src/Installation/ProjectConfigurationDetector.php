@@ -76,8 +76,13 @@ final readonly class ProjectConfigurationDetector
         $mail = $this->mail($environment, $services, $detected);
         $additional = array_values(array_intersect($services, $this->services->namesFor('additional')));
 
+        $redisClient = strtolower($environment['REDIS_CLIENT'] ?? 'auto');
+        if (! in_array($redisClient, InstallationSelection::REDIS_CLIENTS, true)) {
+            $redisClient = 'auto';
+        }
+
         return new InstallationDiscovery(
-            new InstallationSelection($database, $cache, $mail, $additional),
+            new InstallationSelection($database, $cache, $mail, $additional, 'shared', $redisClient),
             $detected,
             array_values(array_unique($sources)),
             $ports,

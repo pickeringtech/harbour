@@ -12,6 +12,9 @@ final readonly class InstallationSelection
     /** @var list<string> */
     public const PROVIDERS = ['shared', 'compose'];
 
+    /** @var list<string> */
+    public const REDIS_CLIENTS = ['auto', 'phpredis', 'predis'];
+
     /** @param list<string> $additionalServices */
     public function __construct(
         public string $database,
@@ -19,6 +22,7 @@ final readonly class InstallationSelection
         public string $mail,
         public array $additionalServices = [],
         public string $provider = 'shared',
+        public string $redisClient = 'auto',
     ) {
         if (! in_array($database, self::databases(), true)) {
             throw self::invalid('database', $database, self::databases());
@@ -38,6 +42,9 @@ final readonly class InstallationSelection
         if (! in_array($provider, self::PROVIDERS, true)) {
             throw self::invalid('infrastructure provider', $provider, self::PROVIDERS);
         }
+        if (! in_array($redisClient, self::REDIS_CLIENTS, true)) {
+            throw self::invalid('Redis client', $redisClient, self::REDIS_CLIENTS);
+        }
         if ($provider === 'compose' && $this->services() === []) {
             throw new HarbourException(
                 ErrorCode::InvalidInstallSelection,
@@ -46,7 +53,7 @@ final readonly class InstallationSelection
         }
     }
 
-    public static function fromOptions(?string $database, ?string $cache, ?string $mail, ?string $with, ?string $provider = null): self
+    public static function fromOptions(?string $database, ?string $cache, ?string $mail, ?string $with, ?string $provider = null, ?string $redisClient = null): self
     {
         $withServices = self::parseWith($with);
         $catalog = new InstallationServiceCatalog;
@@ -71,8 +78,9 @@ final readonly class InstallationSelection
         $additional = array_values(array_intersect($withServices, self::additionalServices()));
 
         $selectedProvider = self::normalize($provider, 'infrastructure provider', self::PROVIDERS) ?? 'shared';
+        $selectedRedisClient = self::normalize($redisClient, 'Redis client', self::REDIS_CLIENTS) ?? 'auto';
 
-        return new self($selectedDatabase, $selectedCache, $selectedMail, array_values(array_unique($additional)), $selectedProvider);
+        return new self($selectedDatabase, $selectedCache, $selectedMail, array_values(array_unique($additional)), $selectedProvider, $selectedRedisClient);
     }
 
     /** @return list<string> */
@@ -90,10 +98,15 @@ final readonly class InstallationSelection
 
     public function withProvider(string $provider): self
     {
-        return new self($this->database, $this->cache, $this->mail, $this->additionalServices, $provider);
+        return new self($this->database, $this->cache, $this->mail, $this->additionalServices, $provider, $this->redisClient);
     }
 
-    /** @return array{database: string, cache: string, mail: string, services: list<string>, provider: string} */
+    public function withRedisClient(string $client): self
+    {
+        return new self($this->database, $this->cache, $this->mail, $this->additionalServices, $this->provider, $client);
+    }
+
+    /** @return array{database: string, cache: string, mail: string, services: list<string>, provider: string, redis_client: string} */
     public function toArray(): array
     {
         return [
@@ -102,6 +115,7 @@ final readonly class InstallationSelection
             'mail' => $this->mail,
             'services' => $this->services(),
             'provider' => $this->provider,
+            'redis_client' => $this->redisClient,
         ];
     }
 

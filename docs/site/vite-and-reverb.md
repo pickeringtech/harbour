@@ -1,12 +1,22 @@
 # Vite and Reverb
 
-Harbour allocates `VITE_PORT` and `REVERB_PORT`; it configures these processes but does not supervise them.
+Harbour allocates `VITE_PORT` and `REVERB_PORT`. Its attached
+`workspace:dev` session starts Laravel and Vite together; Reverb remains an
+explicit project process.
 
 ## Vite with no project changes
 
 Laravel's default hot marker is `public/hot`. Every Git worktree has its own `public/` directory, so the marker is already workspace-local. A normal Laravel 13 Vite project does not need custom `hotFile` code or an `AppServiceProvider` change.
 
-Start Vite with the allocated port:
+The normal development path requires no manual port command:
+
+```bash
+composer workspace:dev
+```
+
+Harbour detects npm, pnpm, Yarn, or Bun from the project's lockfile, installs
+missing Node dependencies, and passes the allocated Vite port with
+`--strictPort`. For external process managers, the equivalent is:
 
 ```bash
 eval "$(php artisan workspace:env --format=shell)"

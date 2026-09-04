@@ -51,6 +51,7 @@ final class ProjectInstallerTest extends TestCase
 
         $scripts = $this->composerScripts();
         self::assertSame(['@php artisan workspace:setup'], $scripts['workspace:setup']);
+        self::assertSame(['@php artisan workspace:dev'], $scripts['workspace:dev']);
         self::assertSame(['@php artisan workspace:status'], $scripts['workspace:status']);
         self::assertSame(['@php artisan workspace:teardown'], $scripts['workspace:teardown']);
 

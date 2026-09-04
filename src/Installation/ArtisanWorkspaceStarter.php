@@ -11,6 +11,7 @@ use PickeringTech\Harbour\Exceptions\ErrorCode;
 use PickeringTech\Harbour\Exceptions\HarbourException;
 use PickeringTech\Harbour\Process\ProcessFailure;
 use PickeringTech\Harbour\Support\WorkspacePath;
+use Symfony\Component\Process\Process;
 
 final readonly class ArtisanWorkspaceStarter implements InstalledWorkspaceStarter
 {
@@ -48,7 +49,14 @@ final readonly class ArtisanWorkspaceStarter implements InstalledWorkspaceStarte
         if ($output !== null) {
             $command[] = '--stream';
         }
-        $result = $this->processes->run($command, $this->workspacePath, [], $output);
+        $stream = $output === null
+            ? null
+            : static function (string $type, string $buffer) use ($output): void {
+                if ($type === Process::ERR) {
+                    $output($type, $buffer);
+                }
+            };
+        $result = $this->processes->run($command, $this->workspacePath, [], $stream);
         if (! $result->successful()) {
             throw new HarbourException(
                 ErrorCode::ProcessFailed,

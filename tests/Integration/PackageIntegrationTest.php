@@ -21,7 +21,7 @@ final class PackageIntegrationTest extends TestCase
     {
         $commands = $this->application()->make(Kernel::class)->all();
 
-        foreach (['workspace:install', 'workspace:setup', 'workspace:teardown', 'workspace:status', 'workspace:env', 'workspace:render', 'workspace:debug'] as $name) {
+        foreach (['workspace:install', 'workspace:setup', 'workspace:dev', 'workspace:teardown', 'workspace:status', 'workspace:env', 'workspace:render', 'workspace:debug'] as $name) {
             self::assertArrayHasKey($name, $commands);
         }
 

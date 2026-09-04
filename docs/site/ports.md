@@ -27,6 +27,9 @@ Harbour allocates and persists a new candidate from the configured range. A
 project `harbour.variables` entry can still override an allocated port variable,
 but setup emits a warning because the override defeats collision avoidance.
 
-Harbour is not a daemon and does not hold every socket open. An unrelated non-Harbour process could claim a reserved port later, so long-running process launchers should enable strict-port behaviour and fail clearly.
+Harbour is not a daemon and does not hold every socket open. An unrelated
+non-Harbour process could claim a reserved port later. `workspace:dev` therefore
+uses one Laravel port attempt and Vite strict-port behaviour; external launchers
+should fail just as clearly.
 
 Use a custom `PortAllocationStrategy` when a team needs centrally assigned ranges or another local policy. See [Custom strategies](/custom-strategies/).

@@ -10,14 +10,18 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Vite;
 use Illuminate\Support\ServiceProvider;
 use PickeringTech\Harbour\Console\DebugCommand;
+use PickeringTech\Harbour\Console\DevCommand;
 use PickeringTech\Harbour\Console\EnvironmentCommand;
 use PickeringTech\Harbour\Console\InstallCommand;
 use PickeringTech\Harbour\Console\RenderCommand;
 use PickeringTech\Harbour\Console\SetupCommand;
 use PickeringTech\Harbour\Console\StatusCommand;
 use PickeringTech\Harbour\Console\TeardownCommand;
+use PickeringTech\Harbour\Contracts\ApplicationLauncher;
 use PickeringTech\Harbour\Contracts\CommandRunner;
+use PickeringTech\Harbour\Contracts\InstallationDependencyInstaller;
 use PickeringTech\Harbour\Contracts\InstallationPreflight;
+use PickeringTech\Harbour\Contracts\InstalledApplicationLauncher;
 use PickeringTech\Harbour\Contracts\InstalledWorkspaceStarter;
 use PickeringTech\Harbour\Contracts\PortAllocationStrategy;
 use PickeringTech\Harbour\Contracts\WorkspaceIdentityStrategy;
@@ -36,7 +40,9 @@ use PickeringTech\Harbour\Exceptions\HarbourException;
 use PickeringTech\Harbour\Hooks\LifecycleHookRunner;
 use PickeringTech\Harbour\Identity\ContextIdentifier;
 use PickeringTech\Harbour\Identity\DefaultWorkspaceIdentityStrategy;
+use PickeringTech\Harbour\Installation\ArtisanApplicationLauncher;
 use PickeringTech\Harbour\Installation\ArtisanWorkspaceStarter;
+use PickeringTech\Harbour\Installation\ComposerDependencyInstaller;
 use PickeringTech\Harbour\Installation\ProjectConfigurationDetector;
 use PickeringTech\Harbour\Installation\ProjectInstaller;
 use PickeringTech\Harbour\Installation\SystemInstallationPreflight;
@@ -47,6 +53,8 @@ use PickeringTech\Harbour\Lifecycle\TeardownSequence;
 use PickeringTech\Harbour\Lifecycle\VariablePipeline;
 use PickeringTech\Harbour\Ports\DefaultPortAllocationStrategy;
 use PickeringTech\Harbour\Ports\FilePortRegistry;
+use PickeringTech\Harbour\Process\ApplicationProcessPlan;
+use PickeringTech\Harbour\Process\ForegroundApplicationLauncher;
 use PickeringTech\Harbour\Process\SymfonyCommandRunner;
 use PickeringTech\Harbour\State\FileWorkspaceStateRepository;
 use PickeringTech\Harbour\Support\LifecycleLock;
@@ -60,6 +68,12 @@ final class HarbourServiceProvider extends ServiceProvider
         $this->app->singleton(HarbourConfig::class, fn (Application $app): HarbourConfig => HarbourConfig::fromRepository($app->make(ConfigRepository::class)));
         $this->app->singleton(FilePortRegistry::class, fn (Application $app): FilePortRegistry => new FilePortRegistry($this->registryPath($app)));
         $this->app->singleton(CommandRunner::class, SymfonyCommandRunner::class);
+        $this->app->singleton(ApplicationProcessPlan::class, fn (Application $app): ApplicationProcessPlan => new ApplicationProcessPlan($this->workspacePath($app)));
+        $this->app->singleton(ApplicationLauncher::class, fn (Application $app): ApplicationLauncher => new ForegroundApplicationLauncher(
+            $this->workspacePath($app),
+            $app->make(ApplicationProcessPlan::class),
+            $app->make(CommandRunner::class),
+        ));
         $this->app->singleton(WorkspaceIdentityStrategy::class, function (Application $app): WorkspaceIdentityStrategy {
             $class = $app->make(ConfigRepository::class)->get('harbour.identity.strategy', DefaultWorkspaceIdentityStrategy::class);
             if (! is_string($class)) {
@@ -91,6 +105,10 @@ final class HarbourServiceProvider extends ServiceProvider
         });
         $this->app->singleton(EnvironmentManager::class, fn (Application $app): EnvironmentManager => new EnvironmentManager($this->workspacePath($app)));
         $this->app->singleton(ProjectInstaller::class, fn (Application $app): ProjectInstaller => new ProjectInstaller($this->workspacePath($app)));
+        $this->app->singleton(InstallationDependencyInstaller::class, fn (Application $app): InstallationDependencyInstaller => new ComposerDependencyInstaller(
+            $this->workspacePath($app),
+            $app->make(CommandRunner::class),
+        ));
         $this->app->singleton(ProjectConfigurationDetector::class, fn (Application $app): ProjectConfigurationDetector => new ProjectConfigurationDetector($this->workspacePath($app)));
         $this->app->singleton(InstallationPreflight::class, fn (Application $app): InstallationPreflight => new SystemInstallationPreflight(
             $app->make(ConfigRepository::class),
@@ -98,6 +116,10 @@ final class HarbourServiceProvider extends ServiceProvider
             $this->workspacePath($app),
         ));
         $this->app->singleton(InstalledWorkspaceStarter::class, fn (Application $app): InstalledWorkspaceStarter => new ArtisanWorkspaceStarter(
+            $this->workspacePath($app),
+            $app->make(CommandRunner::class),
+        ));
+        $this->app->singleton(InstalledApplicationLauncher::class, fn (Application $app): InstalledApplicationLauncher => new ArtisanApplicationLauncher(
             $this->workspacePath($app),
             $app->make(CommandRunner::class),
         ));
@@ -193,6 +215,7 @@ final class HarbourServiceProvider extends ServiceProvider
                 EnvironmentCommand::class,
                 RenderCommand::class,
                 DebugCommand::class,
+                DevCommand::class,
             ]);
             $this->publishes([__DIR__.'/../config/harbour.php' => $this->app->configPath('harbour.php')], 'harbour-config');
             $this->publishes([__DIR__.'/../resources/.env.harbour' => $this->app->basePath('.env.harbour')], 'harbour-environment');

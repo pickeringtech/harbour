@@ -30,6 +30,8 @@ in reverse order and converges safely on `absent`.
 - Database, Docker, and Compose adapters create and destroy owned resources.
 - Environment management preserves and restores the checkout's original `.env`.
 - Setup and teardown sequences encode the documented ordering without coupling it to console commands.
+- The attached development launcher starts native Laravel and Vite processes
+  without changing workspace ownership or infrastructure lifecycle.
 - A structured installation-service specification projects into TUI choices,
   detection aliases/ports, environment metadata, and readable Compose output.
 - Owned-resource types are exhaustive enums, and lifecycle hooks execute
@@ -48,6 +50,7 @@ The repository contains the complete rationale and invariants:
 - [Database lifecycle](https://github.com/pickeringtech/harbour/blob/main/docs/adr/0007-database-lifecycle.md)
 - [Installer-managed Compose](https://github.com/pickeringtech/harbour/blob/main/docs/adr/0010-installer-managed-compose.md)
 - [Safe enablement and pending creation](https://github.com/pickeringtech/harbour/blob/main/docs/adr/0011-safe-enablement-and-pending-creation.md)
+- [Zero-friction dependency remediation and launch](https://github.com/pickeringtech/harbour/blob/main/docs/adr/0014-zero-friction-runtime.md)
 - [Append-only release ledger](https://github.com/pickeringtech/harbour/blob/main/docs/adr/0013-append-only-release-ledger.md)
 
 Read the [full architecture document](https://github.com/pickeringtech/harbour/blob/main/docs/architecture.md) for state schemas, lock ordering, identifier rules, and teardown invariants.

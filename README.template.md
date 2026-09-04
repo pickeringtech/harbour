@@ -92,17 +92,21 @@ Auto-detection understands:
 - SQLite, file-backed state, and log mail when no infrastructure is configured.
 
 Both the accepted auto-detect path and the manual path ask whether to set up the
-first workspace. The manual path can either connect Laravel to shared infrastructure or generate
-a workspace-managed `docker-compose.harbour.yml`. It then asks whether Harbour
-should set up the first workspace and start those managed components now.
+first workspace. The manual path can either connect Laravel to shared
+infrastructure or generate a workspace-managed `docker-compose.harbour.yml`.
+After setup, the installer offers to launch Laravel and Vite as one attached
+development session. Press Ctrl+C to stop those application processes while
+leaving the selected infrastructure ready.
 
 After that final selection, Harbour checks the exact runtime requirements for
-the chosen stack before writing anything. For example, PostgreSQL requires
-`pdo_pgsql`, a PhpRedis project requires the `redis` extension, and Compose mode
-requires Docker with the Compose v2 plugin. Optional Laravel integrations are
-checked only when their component is selected. A failure lists every missing
-extension, Composer package, or executable, explains what needs it, and leaves
-the project unchanged.
+the chosen stack. It offers to install all missing project-level Composer
+integrations in one reviewed operation. Redis and Valkey use portable Predis by
+default, avoiding a host Redis extension entirely. Auto-detection retains
+PhpRedis when the host can load it and otherwise selects Predis; a project may
+still require PhpRedis explicitly. Machine-level requirements such as
+`pdo_pgsql` are reported separately with platform-specific guidance and an
+exact retry command that preserves the completed selection. Compose mode also
+requires Docker with the Compose v2 plugin.
 
 Harbour creates `.env.harbour` and `config/harbour.php`, safely appends its state
 paths to `.gitignore`, and adds Composer workspace aliases when those names are
@@ -134,13 +138,15 @@ php artisan workspace:install \
     --with=meilisearch,minio \
     --compose \
     --start \
+    --install-dependencies \
     --no-interaction
 ```
 
 `--compose` generates isolated service containers while PHP and Node remain
-native. `--start` immediately performs `workspace:setup`; omit either flag to
-use shared infrastructure or defer setup. The main groups also accept `-d`,
-`-c`, and `-m`. See the
+native. `--start` immediately performs `workspace:setup`, and
+`--install-dependencies` authorizes the project-local Composer remediation in
+non-interactive runs. Interactive users can choose `--launch` to skip the final
+launch prompt. The main groups also accept `-d`, `-c`, and `-m`. See the
 [installation guide](https://pickeringtech.github.io/harbour/getting-started/)
 for the supported Sail-compatible services and exact detection rules.
 
@@ -151,14 +157,16 @@ or worktree needs only:
 
 ```bash
 composer install
-composer workspace:setup
+composer workspace:dev
 ```
 
 `composer install` restores `vendor/`, which Git worktrees do not share.
-`workspace:setup` identifies this checkout, atomically reserves ports, creates
+`workspace:dev` identifies this checkout, atomically reserves ports, creates
 its isolated database and Laravel namespaces, preserves and renders `.env`,
 runs normal migrations, and starts only explicitly configured optional Docker
-resources.
+resources. It then starts Laravel and Vite together in the foreground; Ctrl+C
+stops both cleanly. Automation that supplies its own process manager can keep
+using `composer workspace:setup`.
 Configured seeding runs on first setup and after `--fresh`, not on every
 convergent setup; pass `--seed` when an intentional repeat is required.
 
@@ -185,6 +193,7 @@ safety.
 | --- | --- |
 | `workspace:install` | Prepare and commit the project's Harbour policy once. |
 | `workspace:setup` | Create or reconcile this checkout's isolated environment. |
+| `workspace:dev` | Set up and launch Laravel plus Vite as one attached session. |
 | `workspace:status` | Read its concise persisted status without scanning the machine. |
 | `workspace:env` | Emit table, JSON, dotenv, or safely escaped shell variables. |
 | `workspace:render` | Re-render `.env` from current state without clobbering hand edits. |
@@ -228,9 +237,9 @@ REVERB_SERVER_PORT=${REVERB_PORT}
 ```
 
 Laravel's default `public/hot` file is already local to each worktree, so normal
-Laravel Vite projects need no hot-file customization. Run Vite with its allocated
-port, or let your process launcher import `workspace:env`. Advanced custom hot
-files are also supported without an `AppServiceProvider` edit.
+Laravel Vite projects need no hot-file customization. `workspace:dev` passes
+the allocated strict port to Vite automatically. Advanced custom hot files are
+also supported without an `AppServiceProvider` edit.
 
 ## Proven in real worktrees
 
@@ -264,8 +273,10 @@ selects and checks them before creating project files. Docker and the Compose
 v2 plugin are needed only when Compose resources are selected.
 
 Harbour does not create Git worktrees, manage coding agents, install PHP or
-Node, supervise long-running processes, require Docker, replace Compose or
-Sail, deploy production systems, or support non-Laravel frameworks.
+Node runtimes, run background daemons, manage Reverb/queues/schedulers, require
+Docker, replace Compose or Sail, deploy production systems, or support
+non-Laravel frameworks. Its optional `workspace:dev` session keeps only Laravel
+and Vite attached to the current terminal.
 
 ## Security
 

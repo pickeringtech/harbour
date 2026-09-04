@@ -17,10 +17,13 @@ services. When service processes are needed it can generate Docker Compose, and
 it can set up the first workspace immediately.
 
 Once the final stack is known, the installer validates its PHP extensions,
-Laravel client packages, and—when selected—Docker Compose tooling. Missing
-requirements are reported together with their purpose and resolution under the
-stable `HARBOUR_INSTALL_REQUIREMENTS_MISSING` error code. This happens before
-any project file is written.
+Laravel client packages, and—when selected—Docker Compose tooling. It can install
+the selected Composer integrations in one reviewed operation and then rechecks
+the stack automatically. Portable Predis is the default for Redis and Valkey.
+Auto-detected PhpRedis is retained when the host can load it; an explicit CLI
+choice remains authoritative.
+Missing machine capabilities are reported separately with platform guidance and
+an exact retry command under `HARBOUR_INSTALL_REQUIREMENTS_MISSING`.
 
 Use `--detect` to accept the discovered Sail, Compose, Herd, and Laravel
 configuration without interaction.
@@ -36,6 +39,7 @@ php artisan workspace:install \
     --with=meilisearch,minio \
     --compose \
     --start \
+    --install-dependencies \
     --no-interaction
 ```
 
@@ -49,8 +53,11 @@ Options:
 | `-m`, `--mail` | `none`, `log`, `mailpit` | Configure local mail delivery. |
 | `--with` | Comma-separated Sail service names or `none` | Add search, object storage, RabbitMQ, Selenium, Soketi, or express the entire selection with Sail vocabulary. |
 | `--provider` | `shared`, `compose` | Use existing host/shared services or generate a workspace-specific Compose stack. |
+| `--redis-client` | `auto`, `predis`, `phpredis` | Use portable Predis by default or preserve an explicit PhpRedis project. |
 | `--compose` | — | Shorthand for `--provider=compose`. Generates `docker-compose.harbour.yml`. |
 | `--start` | — | Run `workspace:setup` after files are installed and wait for managed services to become ready. |
+| `--launch` | — | Implies `--start`, then launches Laravel and Vite as an attached session. Incompatible with `--json`. |
+| `--install-dependencies` | — | Allow non-interactive installation of selected Composer integration packages. Interactive runs ask first. |
 | `--reconfigure` | — | Replace only files carrying Harbour's generated-file marker. Unmarked files, `.gitignore`, and Composer scripts remain protected. |
 | `--json` | — | Return the selected stack, discovery sources, and file changes using the stable JSON envelope. Use `--detect` or explicit selections. |
 
@@ -71,6 +78,22 @@ Conflicting choices—such as `--database=sqlite --with=mysql` or
 requires at least one service-backed component; a SQLite/file/log selection has
 nothing to containerize. Starting is a normal Harbour setup operation, so all
 port, ownership, state, and teardown guarantees still apply.
+
+## `workspace:dev`
+
+```bash
+composer workspace:dev
+```
+
+Purpose: make a checkout usable and launch it in one step. The command performs
+idempotent workspace setup, installs Node dependencies when a Laravel Vite
+project needs them, and starts Laravel plus Vite on their allocated ports.
+Both processes remain attached to the terminal and stop with Ctrl+C. Managed
+databases and services remain ready for the next run.
+
+Use `--no-vite` for an API-only Laravel session. Harbour deliberately does not
+start Reverb, Horizon, queue workers, or the scheduler; those have project-
+specific operational semantics.
 
 ## `workspace:setup`
 
@@ -115,6 +138,9 @@ For example:
 eval "$(php artisan workspace:env --format=shell)"
 php artisan serve --port="$APP_PORT"
 ```
+
+This export remains available to external orchestrators. A developer who just
+wants to run the application can use `composer workspace:dev` instead.
 
 Secret values are omitted unless an output mode explicitly allows `--show-secrets`. Table and debug output always redact them.
 
