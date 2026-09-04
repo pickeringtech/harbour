@@ -93,6 +93,27 @@ final class ReleaseGitTagPublisherTest extends TestCase
         $publisher->createTagObject(new ReleaseEntry('v1.2.3', $different));
     }
 
+    public function test_it_normalizes_secret_line_endings_before_signing(): void
+    {
+        $privateKey = str_replace("\n", "\r\n", rtrim($this->privateKey, "\n"));
+        $publisher = new GitTagPublisher(
+            $this->directory,
+            'pickeringtech/harbour',
+            'token',
+            $privateKey,
+            'rpickz',
+            '31162594+rpickz@users.noreply.github.com',
+            'file://'.$this->remote,
+        );
+
+        $tag = $publisher->createTagObject(new ReleaseEntry('v1.2.3', $this->commit));
+
+        self::assertStringContainsString(
+            '-----BEGIN SSH SIGNATURE-----',
+            $this->git(['cat-file', '-p', $tag->objectSha]),
+        );
+    }
+
     public function test_it_rejects_invalid_signing_configuration(): void
     {
         $this->expectException(ReleaseException::class);

@@ -8,13 +8,15 @@ use Symfony\Component\Process\Process;
 
 final readonly class GitTagPublisher implements TagPublisher
 {
+    private string $privateKey;
+
     private string $remoteUrl;
 
     public function __construct(
         private string $directory,
         private string $repository,
         private string $token,
-        private string $privateKey,
+        string $privateKey,
         private string $signerName,
         private string $signerEmail,
         ?string $remoteUrl = null,
@@ -25,6 +27,7 @@ final readonly class GitTagPublisher implements TagPublisher
         if ($token === '') {
             throw new ReleaseException('Release token must not be empty.');
         }
+        $privateKey = rtrim(str_replace(["\r\n", "\r"], "\n", $privateKey), "\n")."\n";
         if (! str_starts_with($privateKey, '-----BEGIN OPENSSH PRIVATE KEY-----')) {
             throw new ReleaseException('Release signing key must be an OpenSSH private key.');
         }
@@ -37,6 +40,7 @@ final readonly class GitTagPublisher implements TagPublisher
             throw new ReleaseException('Release signer email is invalid.');
         }
 
+        $this->privateKey = $privateKey;
         $this->remoteUrl = $remoteUrl ?? 'https://github.com/'.$repository.'.git';
         if (! str_starts_with($this->remoteUrl, 'https://github.com/') && ! str_starts_with($this->remoteUrl, 'file://')) {
             throw new ReleaseException('Release tag remote must use GitHub HTTPS.');
