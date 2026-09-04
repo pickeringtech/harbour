@@ -27,6 +27,7 @@ composer acceptance
 composer coverage
 composer mutate
 composer analyse
+composer security:analyse
 composer format:check
 ```
 
@@ -42,7 +43,7 @@ ordinary unit runs never mutate the local Docker daemon.
 - Never weaken an ownership guard to make `--force` convenient.
 - Update README/config examples and `CHANGELOG.md`.
 - Run PHPUnit, the 95% coverage gate, mutation testing, PHPStan/Larastan max,
-  Pint, and relevant integration tests.
+  Psalm taint analysis, Pint, and relevant integration tests.
 
 Keep commits focused. A maintainer may ask for a security review or mutation
 test focused on safety-critical branches.
