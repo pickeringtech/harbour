@@ -1,4 +1,4 @@
-# ADR 0012: Releases reconcile from pre-existing commits
+# ADR 0013: Releases reconcile from pre-existing commits
 
 Status: accepted
 

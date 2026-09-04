@@ -9,6 +9,7 @@ use function Laravel\Prompts\intro;
 use function Laravel\Prompts\multiselect;
 use function Laravel\Prompts\select;
 
+use PickeringTech\Harbour\Contracts\InstallationPreflight;
 use PickeringTech\Harbour\Contracts\InstalledWorkspaceStarter;
 use PickeringTech\Harbour\Exceptions\ErrorCode;
 use PickeringTech\Harbour\Exceptions\HarbourException;
@@ -37,13 +38,19 @@ final class InstallCommand extends WorkspaceCommand
         ProjectInstaller $installer,
         ProjectConfigurationDetector $detector,
         InstalledWorkspaceStarter $starter,
+        InstallationPreflight $preflight,
     ): int {
         $json = (bool) $this->option('json');
 
-        return $this->executeSafely($json, function () use ($installer, $detector, $starter, $json): int {
+        return $this->executeSafely($json, function () use ($installer, $detector, $starter, $preflight, $json): int {
             $plan = $this->installation($json, $detector);
             $discovery = $plan->discovery;
             $selection = $discovery->selection;
+            if ($json) {
+                $preflight->assertReady($selection);
+            } else {
+                $this->components->task('Checking selected stack requirements', fn () => $preflight->assertReady($selection));
+            }
             $result = $installer->install($discovery);
             $startOutput = '';
 

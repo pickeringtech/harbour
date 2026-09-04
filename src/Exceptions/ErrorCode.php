@@ -19,5 +19,6 @@ enum ErrorCode: string
     case InvalidConfiguration = 'HARBOUR_INVALID_CONFIGURATION';
     case InstallSelectionRequired = 'HARBOUR_INSTALL_SELECTION_REQUIRED';
     case InvalidInstallSelection = 'HARBOUR_INVALID_INSTALL_SELECTION';
+    case InstallRequirementsMissing = 'HARBOUR_INSTALL_REQUIREMENTS_MISSING';
     case ProcessFailed = 'HARBOUR_PROCESS_FAILED';
 }

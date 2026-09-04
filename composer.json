@@ -16,6 +16,7 @@
         "source": "https://github.com/pickeringtech/harbour"
     },
     "require": {
+        "composer-runtime-api": "^2.0",
         "php": "^8.4",
         "illuminate/console": "^13.0",
         "illuminate/contracts": "^13.0",
