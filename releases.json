@@ -1,0 +1,17 @@
+{
+    "schema": 1,
+    "releases": [
+        {
+            "version": "v0.0.1",
+            "commit": "b29047d0a593fe52221751af54761009b31b194f"
+        },
+        {
+            "version": "v0.0.2",
+            "commit": "46d62be6198a8f6aafe1564b7995484e0e57c119"
+        },
+        {
+            "version": "v0.0.3",
+            "commit": "b40c1b5fb0154cc5907564dc218463cab466846f"
+        }
+    ]
+}

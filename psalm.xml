@@ -10,6 +10,8 @@
 >
     <projectFiles>
         <directory name="src" />
+        <directory name="tools/release" />
+        <file name="tools/release.php" />
         <ignoreFiles>
             <directory name="vendor" />
         </ignoreFiles>

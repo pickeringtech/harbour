@@ -8,6 +8,9 @@ All notable changes will be documented here. The format follows
 
 ### Added
 
+- Releases are now reconciled from a reviewed append-only manifest into
+  verified annotated tags, immutable GitHub releases, and checked Packagist
+  mappings without a maintainer's local signing or publication ceremony.
 - `workspace:install --reconfigure` can replace only files carrying Harbour's
   generated-file marker; project-authored files, `.gitignore`, and Composer
   scripts retain their non-destructive rules.
