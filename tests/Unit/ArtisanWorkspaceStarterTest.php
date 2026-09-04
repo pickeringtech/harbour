@@ -89,6 +89,54 @@ final class ArtisanWorkspaceStarterTest extends TestCase
         }
     }
 
+    public function test_it_ignores_malformed_error_payloads_and_unsafe_context_keys(): void
+    {
+        $invalidPayloads = [
+            '{invalid}',
+            '{"ok":false,"error":"invalid"}',
+            '{"ok":true,"error":{"code":"HARBOUR_DATABASE_CREATION_FAILED","message":"wrong status","context":[]}}',
+            '{"ok":false,"error":{"code":42,"message":"invalid code","context":[]}}',
+            '{"ok":false,"error":{"code":"UNKNOWN","message":"unknown code","context":[]}}',
+            '{"ok":false,"error":{"code":"HARBOUR_DATABASE_CREATION_FAILED","message":"","context":[]}}',
+            '{"ok":false,"error":{"code":"HARBOUR_DATABASE_CREATION_FAILED","message":"invalid context","context":"unsafe"}}',
+        ];
+
+        foreach ($invalidPayloads as $payload) {
+            $starter = new ArtisanWorkspaceStarter(
+                $this->directory,
+                new RecordingStarterRunner(new ProcessResult(1, $payload)),
+            );
+
+            try {
+                $starter->start();
+                self::fail('Malformed child errors must use the safe fallback.');
+            } catch (HarbourException $exception) {
+                self::assertSame(ErrorCode::ProcessFailed, $exception->errorCode);
+                self::assertStringContainsString('project files were created', $exception->getMessage());
+            }
+        }
+
+        $payload = json_encode([
+            'ok' => false,
+            'error' => [
+                'code' => ErrorCode::DatabaseCreationFailed->value,
+                'message' => 'Safe error.',
+                'context' => [0 => 'discarded', 'database' => 'harbour_test'],
+            ],
+        ], JSON_THROW_ON_ERROR);
+        $starter = new ArtisanWorkspaceStarter(
+            $this->directory,
+            new RecordingStarterRunner(new ProcessResult(1, $payload)),
+        );
+
+        try {
+            $starter->start();
+            self::fail('Expected the structured child error.');
+        } catch (HarbourException $exception) {
+            self::assertSame(['database' => 'harbour_test', 'exit_code' => 1], $exception->context);
+        }
+    }
+
     public function test_it_rejects_a_missing_or_symlinked_artisan_file(): void
     {
         unlink($this->directory.'/artisan');
