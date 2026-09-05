@@ -27,10 +27,16 @@ final readonly class SqliteDatabaseDriver implements DatabaseLifecycleDriver
         $path = $this->safePath($workspacePath, $database);
 
         if (file_exists($path) || is_link($path)) {
-            if (is_file($path) && $resource->driver === 'sqlite'
-                && $evidence->fingerprint === $configuration->fingerprint()
-                && $this->exists($resource, $configuration)) {
-                return $resource;
+            if (is_file($path) && $resource->driver === 'sqlite' && $evidence->fingerprint === $configuration->fingerprint()) {
+                try {
+                    $pdo = new PDO('sqlite:'.$path, options: [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+                    if ($this->marker->matches($pdo, $evidence)
+                        || ($resource->creationPending() && $this->marker->reassignIfOwnedByWorkspace($pdo, $evidence))) {
+                        return $resource;
+                    }
+                } catch (Throwable) {
+                    // The existing file is not a database Harbour can prove it owns.
+                }
             }
 
             throw new HarbourException(ErrorCode::DatabaseCreationFailed, "Refusing to claim existing SQLite database [{$path}].");

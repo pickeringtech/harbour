@@ -130,6 +130,8 @@ app_port_a="$(status_port "${acceptance_root}/status-a.json" APP_PORT)"
 app_port_b="$(status_port "${acceptance_root}/status-b.json" APP_PORT)"
 reverb_port_a="$(status_port "${acceptance_root}/status-a.json" REVERB_PORT)"
 reverb_port_b="$(status_port "${acceptance_root}/status-b.json" REVERB_PORT)"
+compose_port_a="$(status_port "${acceptance_root}/status-a.json" ACCEPTANCE_COMPOSE_PORT)"
+compose_port_b="$(status_port "${acceptance_root}/status-b.json" ACCEPTANCE_COMPOSE_PORT)"
 
 setsid bash -c 'cd "$1" && exec composer workspace:dev' bash "${workspace_a}" >"${acceptance_root}/dev-a.log" 2>&1 &
 dev_a=$!
@@ -146,6 +148,8 @@ wait_for_port "${app_port_a}" || { cat "${acceptance_root}/dev-a.log"; exit 1; }
 wait_for_port "${app_port_b}" || { cat "${acceptance_root}/dev-b.log"; exit 1; }
 wait_for_port "${reverb_port_a}" || { cat "${acceptance_root}/reverb-a.log"; exit 1; }
 wait_for_port "${reverb_port_b}" || { cat "${acceptance_root}/reverb-b.log"; exit 1; }
+wait_for_port "${compose_port_a}" || { cat "${acceptance_root}/dev-a.log"; exit 1; }
+wait_for_port "${compose_port_b}" || { cat "${acceptance_root}/dev-b.log"; exit 1; }
 grep -q ":${vite_port_a}" "${workspace_a}/public/hot"
 grep -q ":${vite_port_b}" "${workspace_b}/public/hot"
 test "$(cat "${workspace_a}/public/hot")" != "$(cat "${workspace_b}/public/hot")"

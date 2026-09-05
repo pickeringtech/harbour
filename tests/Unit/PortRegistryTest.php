@@ -54,7 +54,7 @@ final class PortRegistryTest extends TestCase
         new PortRequirement('APP_PORT', 9000, 8000);
     }
 
-    public function test_a_reused_reservation_is_reallocated_when_its_port_has_been_taken(): void
+    public function test_an_owned_reservation_remains_stable_while_its_service_is_listening(): void
     {
         $registry = new FilePortRegistry($this->directory);
         $workspace = $this->directory.'/workspace';
@@ -66,7 +66,10 @@ final class PortRegistryTest extends TestCase
 
         try {
             $second = $registry->reserve('ws-a', $workspace, $requirement);
-            self::assertNotSame($first->port, $second->port);
+            self::assertSame($first->port, $second->port);
+
+            $other = $registry->reserve('ws-b', $workspace, $requirement);
+            self::assertNotSame($first->port, $other->port);
         } finally {
             fclose($socket);
         }

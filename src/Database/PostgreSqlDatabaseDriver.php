@@ -35,6 +35,9 @@ final readonly class PostgreSqlDatabaseDriver implements DatabaseLifecycleDriver
             if ($this->marker->matches($target, $evidence)) {
                 return $resource;
             }
+            if ($resource->creationPending() && $this->marker->reassignIfOwnedByWorkspace($target, $evidence)) {
+                return $resource;
+            }
 
             throw new HarbourException(ErrorCode::DatabaseCreationFailed, "Refusing to claim existing PostgreSQL database [{$database}].");
         }

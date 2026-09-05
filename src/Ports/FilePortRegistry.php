@@ -34,17 +34,14 @@ final class FilePortRegistry
             ));
             foreach ($registry['reservations'] as $index => $reservation) {
                 if ($reservation['workspace_id'] === $workspaceId && $reservation['name'] === $requirement->name) {
-                    if ($this->isAvailable($reservation['host'], $reservation['port'])) {
-                        $registry['reservations'][$index]['workspace_path'] = $workspacePath;
+                    // The registry is Harbour's ownership record. An occupied
+                    // owned port commonly means this workspace's application or
+                    // managed service is already running, so repeated setup must
+                    // keep the allocation stable. A genuine external collision
+                    // is surfaced by strict process or service startup.
+                    $registry['reservations'][$index]['workspace_path'] = $workspacePath;
 
-                        return [$registry, new PortAllocation($requirement->name, $reservation['port'], $workspaceId, $reservation['host'])];
-                    }
-
-                    // The reservation outlived its bind availability. Discard it
-                    // under the same lock and select another port in range.
-                    unset($registry['reservations'][$index]);
-                    $registry['reservations'] = array_values($registry['reservations']);
-                    break;
+                    return [$registry, new PortAllocation($requirement->name, $reservation['port'], $workspaceId, $reservation['host'])];
                 }
             }
 

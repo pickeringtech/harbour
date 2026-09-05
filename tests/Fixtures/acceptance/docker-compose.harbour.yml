@@ -1,4 +1,5 @@
 services:
   acceptance:
-    image: alpine:3.22
-    command: ["sleep", "300"]
+    image: nginx:1.29-alpine
+    ports:
+      - "127.0.0.1:${ACCEPTANCE_COMPOSE_PORT}:80"

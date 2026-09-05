@@ -101,6 +101,76 @@ final class DatabaseDriverSafetyTest extends TestCase
         $this->assertHarbourCode(ErrorCode::DatabaseNotOwned, fn () => $driver->destroy($resource, $configuration, $this->directory));
     }
 
+    public function test_sqlite_reassigns_a_valid_stale_marker_only_to_the_same_workspace(): void
+    {
+        if (! extension_loaded('pdo_sqlite')) {
+            self::markTestSkipped('The pdo_sqlite extension is required.');
+        }
+        $driver = new SqliteDatabaseDriver;
+        $path = $this->directory.'/database.sqlite';
+        $configuration = new DatabaseConfiguration('sqlite', database: $path);
+        $workspace = 'ws_'.str_repeat('a', 64);
+        $original = new OwnedResource('db_'.str_repeat('b', 32), $workspace, 'database', 'sqlite', [
+            'database' => $path,
+            'connection_fingerprint' => $configuration->fingerprint(),
+            'ownership_token' => str_repeat('c', 64),
+            'creation_pending' => true,
+        ]);
+        $replacement = new OwnedResource('db_'.str_repeat('d', 32), $workspace, 'database', 'sqlite', [
+            'database' => $path,
+            'connection_fingerprint' => $configuration->fingerprint(),
+            'ownership_token' => str_repeat('e', 64),
+            'creation_pending' => true,
+        ]);
+        $confirmedCollision = new OwnedResource('db_'.str_repeat('f', 32), $workspace, 'database', 'sqlite', [
+            'database' => $path,
+            'connection_fingerprint' => $configuration->fingerprint(),
+            'ownership_token' => str_repeat('1', 64),
+        ]);
+
+        $driver->create($original, $this->directory, $configuration);
+        $this->assertHarbourCode(
+            ErrorCode::DatabaseCreationFailed,
+            fn () => $driver->create($confirmedCollision, $this->directory, $configuration),
+        );
+        self::assertTrue($driver->exists($original, $configuration));
+        $driver->create($replacement, $this->directory, $configuration);
+
+        self::assertFalse($driver->exists($original, $configuration));
+        self::assertTrue($driver->exists($replacement, $configuration));
+        $driver->destroy($replacement, $configuration, $this->directory);
+    }
+
+    public function test_sqlite_refuses_to_reassign_a_stale_marker_from_another_workspace(): void
+    {
+        if (! extension_loaded('pdo_sqlite')) {
+            self::markTestSkipped('The pdo_sqlite extension is required.');
+        }
+        $driver = new SqliteDatabaseDriver;
+        $path = $this->directory.'/database.sqlite';
+        $configuration = new DatabaseConfiguration('sqlite', database: $path);
+        $original = new OwnedResource('db_'.str_repeat('b', 32), 'ws_'.str_repeat('a', 64), 'database', 'sqlite', [
+            'database' => $path,
+            'connection_fingerprint' => $configuration->fingerprint(),
+            'ownership_token' => str_repeat('c', 64),
+            'creation_pending' => true,
+        ]);
+        $collision = new OwnedResource('db_'.str_repeat('d', 32), 'ws_'.str_repeat('f', 64), 'database', 'sqlite', [
+            'database' => $path,
+            'connection_fingerprint' => $configuration->fingerprint(),
+            'ownership_token' => str_repeat('e', 64),
+            'creation_pending' => true,
+        ]);
+
+        $driver->create($original, $this->directory, $configuration);
+        $this->assertHarbourCode(
+            ErrorCode::DatabaseCreationFailed,
+            fn () => $driver->create($collision, $this->directory, $configuration),
+        );
+        self::assertTrue($driver->exists($original, $configuration));
+        $driver->destroy($original, $configuration, $this->directory);
+    }
+
     /** @param callable(): mixed $operation */
     private function assertHarbourCode(ErrorCode $code, callable $operation): void
     {

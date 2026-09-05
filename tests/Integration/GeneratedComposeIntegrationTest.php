@@ -89,6 +89,11 @@ final class GeneratedComposeIntegrationTest extends TestCase
                 $workspace->state()->resources,
                 static fn ($resource): bool => $resource->type === ResourceType::ComposeProject,
             ));
+
+            $repeated = $manager->setup();
+            self::assertSame($workspace->ports(), $repeated->ports());
+            $this->assertPortOpen($redisPort);
+            $this->assertPortOpen($mailPort);
         } finally {
             $manager->teardown(true);
         }
@@ -221,6 +226,11 @@ YAML,
             $this->assertPortOpen($port);
             self::assertStringContainsString('DB_HOST=127.0.0.1', (string) file_get_contents($this->workspaceDirectory.'/.env'));
             self::assertStringContainsString("DB_PORT={$port}", (string) file_get_contents($this->workspaceDirectory.'/.env'));
+
+            $repeated = $manager->setup();
+            self::assertSame($port, $repeated->ports()['DB_PORT'] ?? null);
+            self::assertSame($database, $repeated->toArray()['database'] ?? null);
+            $this->assertPortOpen($port);
         } finally {
             $manager->teardown(true);
         }

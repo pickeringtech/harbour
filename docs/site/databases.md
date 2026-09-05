@@ -25,9 +25,20 @@ Harbour uses PDO instead of requiring `createdb`, `dropdb`, `psql`, or `mysql` e
 
 Before deletion, state, driver, server fingerprint, database name, workspace ID, and the marker stored inside the database must agree. A current `.env` database name is not ownership evidence.
 
+If local Harbour state is accidentally removed while its database survives,
+the next pending setup may recover that database only when it contains one
+structurally valid Harbour marker for the exact same workspace. Recovery
+atomically rotates the resource ID and ownership token into the new state.
+Harbour still refuses unmarked databases, malformed markers, and markers for
+another workspace.
+
 ## SQLite
 
-The default file is `database/harbour.sqlite`. Its path must stay inside the checkout and may not traverse symlinks. Harbour creates and removes only a file recorded as Harbour-owned; a pre-existing SQLite file is never adopted silently.
+The default file is `database/harbour.sqlite`. Its path must stay inside the
+checkout and may not traverse symlinks. Harbour creates and removes only a file
+recorded as Harbour-owned. The same narrowly guarded state-loss recovery used
+for server databases applies to an existing SQLite file; arbitrary pre-existing
+files are never adopted.
 
 ## Shared services
 
