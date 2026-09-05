@@ -15,6 +15,50 @@ Redis namespaces, sessions, queues, and environment—without launching another
 complete PHP, database, Redis, and Node stack. PHP and Node stay native; shared
 infrastructure stays shared.
 
+## Harbour in 5 minutes
+
+Requires Laravel 13+, PHP 8.4+, Composer, and Node for Vite. Host PHP needs the
+PDO driver for your chosen database. Docker is needed only when you choose
+Docker Compose services.
+
+### Once, in the primary checkout
+
+```bash
+composer require --dev pickeringtech/harbour
+php artisan workspace:install
+```
+
+Choose auto-detection or select the services yourself. Choose Docker Compose if
+Harbour should provide them. Accept setup, dependency installation when
+offered, and **Launch Laravel and Vite now?** Harbour prints the application
+URL when it is ready.
+
+Press Ctrl+C to stop Laravel and Vite, then commit the project files Harbour
+lists. This shares the Harbour policy with every worktree; local workspace
+state stays gitignored.
+
+### On each parallel agent worktree
+
+```bash
+composer install
+composer workspace:dev
+```
+
+The first command installs that checkout's dependencies. The second creates its
+isolated ports, database, namespaces, and `.env`, then launches Laravel and
+Vite. Press Ctrl+C to stop them.
+
+### Before removing a worktree
+
+```bash
+composer workspace:teardown -- --force
+```
+
+This removes only that worktree's Harbour-owned resources and restores its
+previous `.env`. It does not touch another worktree or shared infrastructure.
+
+## Why Harbour
+
 <!-- Diagram source: README.template.md#shared-infrastructure -->
 ![Without Harbour, each worktree runs a full stack. With Harbour, native worktrees use isolated namespaces on shared infrastructure.](docs/images/readme/shared-infrastructure.svg)
 
@@ -25,7 +69,7 @@ every checkout is unnecessarily heavyweight. Harbour keeps the native Laravel
 workflow and shares infrastructure while isolating each workspace's mutable
 state. The two tools serve different development modes and work well together.
 
-## Install
+## Installation details
 
 Run these once in the Laravel project's primary checkout:
 
@@ -113,7 +157,7 @@ launch prompt. The main groups also accept `-d`, `-c`, and `-m`. See the
 [installation guide](https://pickeringtech.github.io/harbour/getting-started/)
 for the supported Sail-compatible services and exact detection rules.
 
-## Five-minute workflow
+## Daily worktree workflow
 
 Commit the project-level files created by `workspace:install`. Then a new clone
 or worktree needs only:
