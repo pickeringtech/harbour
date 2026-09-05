@@ -6,6 +6,14 @@ All notable changes will be documented here. The format follows
 
 ## [Unreleased]
 
+## [0.0.7] - 2026-09-05
+
+### Changed
+
+- Release preparation now uses one reviewed human pull request: a version-only
+  intent is resolved to its exact merge commit before the release App appends
+  the immutable ledger entry and publishes the release.
+
 ### Fixed
 
 - Repeated setup now preserves a workspace's owned port reservations while its
@@ -176,7 +184,8 @@ All notable changes will be documented here. The format follows
 - A full two-worktree Laravel acceptance job covering PostgreSQL, Redis cache,
   locks, queues, Docker, Compose, independent teardown, and failure recovery.
 
-[Unreleased]: https://github.com/pickeringtech/harbour/compare/v0.0.6...HEAD
+[Unreleased]: https://github.com/pickeringtech/harbour/compare/v0.0.7...HEAD
+[0.0.7]: https://github.com/pickeringtech/harbour/compare/v0.0.6...v0.0.7
 [0.0.6]: https://github.com/pickeringtech/harbour/compare/v0.0.5...v0.0.6
 [0.0.5]: https://github.com/pickeringtech/harbour/compare/v0.0.4...v0.0.5
 [0.0.4]: https://github.com/pickeringtech/harbour/compare/v0.0.3...v0.0.4
