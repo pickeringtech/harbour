@@ -44,6 +44,29 @@ final class ReleasePolicyIntegrationTest extends TestCase
         self::assertSame($this->baseCommit(), $this->refSha($this->createTag()));
     }
 
+    public function test_non_bypass_identity_cannot_push_a_control_plane_commit_to_main(): void
+    {
+        $this->requireActor('non-bypass');
+        $main = $this->branchSha();
+        $child = $this->createChildCommit($main);
+
+        self::assertContains($this->updateBranch($child), [403, 422]);
+        self::assertSame($main, $this->branchSha());
+    }
+
+    public function test_release_app_can_fast_forward_but_cannot_rewrite_or_delete_main(): void
+    {
+        $this->requireActor('release-app');
+        $main = $this->branchSha();
+        $child = $this->createChildCommit($main);
+
+        self::assertSame(200, $this->updateBranch($child));
+        self::assertSame($child, $this->branchSha());
+        self::assertContains($this->updateBranch($main, true), [403, 422]);
+        self::assertContains($this->deleteBranch(), [403, 422]);
+        self::assertSame($child, $this->branchSha());
+    }
+
     private function requireActor(string $expected): void
     {
         if ($this->environment('HARBOUR_RELEASE_POLICY_INTEGRATION', '') !== '1') {
@@ -88,6 +111,52 @@ final class ReleasePolicyIntegrationTest extends TestCase
         return $this->request('DELETE', '/git/refs/tags/'.rawurlencode($tag))['status'];
     }
 
+    private function branchSha(): string
+    {
+        $response = $this->request('GET', '/git/ref/heads/main');
+        self::assertSame(200, $response['status']);
+        $object = $response['data']['object'] ?? null;
+        self::assertIsArray($object);
+        $sha = $object['sha'] ?? null;
+        self::assertIsString($sha);
+
+        return $sha;
+    }
+
+    private function createChildCommit(string $parent): string
+    {
+        $commit = $this->request('GET', '/git/commits/'.$parent);
+        self::assertSame(200, $commit['status']);
+        $tree = $commit['data']['tree'] ?? null;
+        self::assertIsArray($tree);
+        $treeSha = $tree['sha'] ?? null;
+        self::assertIsString($treeSha);
+
+        $created = $this->request('POST', '/git/commits', [
+            'message' => 'Harbour release branch-policy probe',
+            'tree' => $treeSha,
+            'parents' => [$parent],
+        ]);
+        self::assertSame(201, $created['status']);
+        $sha = $created['data']['sha'] ?? null;
+        self::assertIsString($sha);
+
+        return $sha;
+    }
+
+    private function updateBranch(string $commit, bool $force = false): int
+    {
+        return $this->request('PATCH', '/git/refs/heads/main', [
+            'sha' => $commit,
+            'force' => $force,
+        ])['status'];
+    }
+
+    private function deleteBranch(): int
+    {
+        return $this->request('DELETE', '/git/refs/heads/main')['status'];
+    }
+
     /** @return array{status: int, data: array<mixed>} */
     private function ref(string $tag): array
     {
@@ -107,7 +176,7 @@ final class ReleasePolicyIntegrationTest extends TestCase
     }
 
     /**
-     * @param  array<string, bool|string>|null  $body
+     * @param  array<string, bool|string|list<string>>|null  $body
      * @return array{status: int, data: array<mixed>}
      */
     private function request(string $method, string $path, ?array $body = null): array

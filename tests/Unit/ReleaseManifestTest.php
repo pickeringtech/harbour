@@ -70,6 +70,10 @@ final class ReleaseManifestTest extends TestCase
             static fn ($entry): string => $entry->version,
             $appended->entriesAddedAfter($base),
         ));
+        self::assertSame('v1.1.0', $appended->latest()?->version);
+        self::assertTrue($appended->hasVersion('v1.0.0'));
+        self::assertFalse($appended->hasVersion('v2.0.0'));
+        self::assertSame($appended->toJson(), $base->withAppended($appended->latest())->toJson());
     }
 
     public function test_append_only_comparison_rejects_edits_and_removals(): void

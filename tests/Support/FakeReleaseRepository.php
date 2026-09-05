@@ -6,10 +6,13 @@ namespace PickeringTech\Harbour\Tests\Support;
 
 use PickeringTech\Harbour\Release\Manifest;
 use PickeringTech\Harbour\Release\ReleaseException;
+use PickeringTech\Harbour\Release\ReleaseIntent;
 use PickeringTech\Harbour\Release\ReleaseRepository;
 
 final class FakeReleaseRepository implements ReleaseRepository
 {
+    public string $latestChange = '';
+
     /** @var array<string, string> */
     public array $types = [];
 
@@ -21,6 +24,9 @@ final class FakeReleaseRepository implements ReleaseRepository
 
     /** @var array<string, Manifest|null> */
     public array $manifests = [];
+
+    /** @var array<string, ReleaseIntent|null> */
+    public array $intents = [];
 
     public function assertCommit(string $commit): void
     {
@@ -54,8 +60,22 @@ final class FakeReleaseRepository implements ReleaseRepository
         return $this->manifests[$commit] ?? null;
     }
 
+    public function intentAt(string $commit, string $path): ?ReleaseIntent
+    {
+        return $this->intents[$commit] ?? null;
+    }
+
     public function mergeBase(string $left, string $right): string
     {
         return $right;
+    }
+
+    public function latestFirstParentChange(string $revision, string $path): string
+    {
+        if ($this->latestChange === '') {
+            throw new ReleaseException("Could not resolve the main commit that changed {$path}.");
+        }
+
+        return $this->latestChange;
     }
 }

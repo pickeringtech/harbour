@@ -1,10 +1,10 @@
 name: Release reconciliation
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
-    paths:
-      - 'releases.json'
   workflow_dispatch:
 
 permissions:
@@ -15,34 +15,38 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  validate:
-    name: Validate desired release state
+  detect:
+    name: Detect pending release intent
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
-      checks: read
-      contents: read
+    outputs:
+      pending: ${{ steps.plan.outputs.pending }}
+      target: ${{ steps.plan.outputs.target }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: main
           fetch-depth: 0
           persist-credentials: false
       - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
           php-version: '8.4'
           coverage: none
-      - uses: ramsey/composer-install@65e4f84970763564f46a70b8a54b90d033b3bdda # 4.0.0
-      - name: Validate release ledger and required checks
+      - run: composer install --no-interaction --prefer-dist --no-progress --no-plugins --no-scripts
+      - name: Resolve version-only intent to its main commit
+        id: plan
         env:
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_TOKEN: ${{ github.token }}
-          RELEASE_MAIN_REF: ${{ github.sha }}
-          RELEASE_SKIP_REQUIRED_CHECKS: '1'
-        run: php tools/release.php validate
+          RELEASE_MAIN_REF: origin/main
+        run: php tools/release.php plan
 
   publish:
-    name: Reconcile immutable releases
-    needs: validate
+    name: Append ledger and reconcile immutable release
+    needs: detect
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (needs.detect.outputs.pending == 'true' &&
+      needs.detect.outputs.target == github.event.workflow_run.head_sha)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: release
@@ -51,13 +55,14 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || 'main' }}
           fetch-depth: 0
           persist-credentials: false
       - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
           php-version: '8.4'
           coverage: none
-      - uses: ramsey/composer-install@65e4f84970763564f46a70b8a54b90d033b3bdda # 4.0.0
+      - run: composer install --no-interaction --prefer-dist --no-progress --no-plugins --no-scripts
       - name: Mint least-privilege release token
         id: release-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -67,10 +72,17 @@ jobs:
           permission-administration: read
           permission-checks: read
           permission-contents: write
+      - name: Validate target and append immutable ledger entry
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          RELEASE_EXPECTED_TARGET: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || '' }}
+          RELEASE_MAIN_REF: origin/main
+          RELEASE_TOKEN: ${{ steps.release-token.outputs.token }}
+        run: php tools/release.php append
       - name: Reconcile tags, releases, and Packagist
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
-          RELEASE_MAIN_REF: ${{ github.sha }}
+          RELEASE_MAIN_REF: origin/main
           RELEASE_SIGNER_EMAIL: 31162594+rpickz@users.noreply.github.com
           RELEASE_SIGNER_NAME: rpickz
           RELEASE_SIGNING_PRIVATE_KEY: ${{ secrets.RELEASE_SIGNING_PRIVATE_KEY }}

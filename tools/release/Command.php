@@ -16,6 +16,9 @@ final class Command
         try {
             return match ($command) {
                 'validate' => self::validate($root),
+                'validate-pr' => self::validatePullRequest($root),
+                'plan' => self::plan($root),
+                'append' => self::append($root),
                 'reconcile' => self::reconcile($root),
                 default => self::usage(),
             };
@@ -24,6 +27,113 @@ final class Command
 
             return 1;
         }
+    }
+
+    private static function validatePullRequest(string $root): int
+    {
+        $baseCommit = self::environment('RELEASE_BASE_SHA');
+        if (preg_match('/^[0-9a-f]{40}$/D', $baseCommit) !== 1) {
+            throw new ReleaseException('RELEASE_BASE_SHA must be a full lowercase 40-character commit ID.');
+        }
+
+        $repository = self::environment('GITHUB_REPOSITORY');
+        $git = new GitRepository($root);
+        $manifest = Manifest::fromFile($root.'/releases.json');
+        $mergeBase = $git->mergeBase('HEAD', $baseCommit);
+        $base = $git->manifestAt($mergeBase, 'releases.json');
+        if ($base === null) {
+            throw new ReleaseException('The pull-request base does not contain releases.json.');
+        }
+        $manifest->assertSameAs($base);
+        $baseManifestJson = $git->fileAt($mergeBase, 'releases.json');
+        $manifestJson = file_get_contents($root.'/releases.json');
+        if (! is_string($manifestJson) || $manifestJson !== $baseManifestJson) {
+            throw new ReleaseException('Human pull requests must not change releases.json; the release App owns ledger appends.');
+        }
+
+        $github = new HttpGitHubClient($repository, self::optionalEnvironment('GITHUB_TOKEN'));
+        (new Validator($git, $github, 'HEAD'))->validate($manifest, $manifest);
+
+        $intent = ReleaseIntent::fromFile($root.'/release-intent.json');
+        $planner = new ReleasePlanner($git);
+        $planner->assertIntentTransition($base, $git->intentAt($mergeBase, 'release-intent.json'), $intent);
+        $pending = $planner->pendingEntry($manifest, $intent, 'HEAD');
+        if ($pending !== null) {
+            $head = $git->mergeBase('HEAD', 'HEAD');
+            $candidate = $manifest->withAppended(new ReleaseEntry($pending->version, $head));
+            (new Validator($git, $github, 'HEAD'))->validate($candidate, $candidate);
+        }
+
+        fwrite(STDOUT, sprintf(
+            'Validated release PR inputs (%s).%s',
+            $pending === null ? 'no pending release' : 'pending '.$pending->version,
+            PHP_EOL,
+        ));
+
+        return 0;
+    }
+
+    private static function plan(string $root): int
+    {
+        $git = new GitRepository($root);
+        $entry = (new ReleasePlanner($git))->pendingEntry(
+            Manifest::fromFile($root.'/releases.json'),
+            ReleaseIntent::fromFile($root.'/release-intent.json'),
+            self::environment('RELEASE_MAIN_REF', 'origin/main'),
+        );
+        $pending = $entry === null ? 'false' : 'true';
+        $output = "pending={$pending}\n";
+        if ($entry !== null) {
+            $output .= "version={$entry->version}\ntarget={$entry->commit}\n";
+        }
+
+        $outputPath = self::environment('GITHUB_OUTPUT', '');
+        if ($outputPath !== '' && @file_put_contents($outputPath, $output, FILE_APPEND | LOCK_EX) === false) {
+            throw new ReleaseException('GitHub output file could not be written.');
+        }
+        fwrite(STDOUT, $entry === null
+            ? "Release intent is already recorded in the ledger.\n"
+            : "Pending {$entry->version} targets {$entry->commit}.\n");
+
+        return 0;
+    }
+
+    private static function append(string $root): int
+    {
+        $repository = self::environment('GITHUB_REPOSITORY');
+        $mainRef = self::environment('RELEASE_MAIN_REF', 'origin/main');
+        $manifest = Manifest::fromFile($root.'/releases.json');
+        $git = new GitRepository($root);
+        $entry = (new ReleasePlanner($git))->pendingEntry(
+            $manifest,
+            ReleaseIntent::fromFile($root.'/release-intent.json'),
+            $mainRef,
+        );
+
+        if ($entry === null) {
+            fwrite(STDOUT, "Release intent is already recorded; no ledger commit was created.\n");
+
+            return 0;
+        }
+
+        $expectedTarget = self::environment('RELEASE_EXPECTED_TARGET', '');
+        if ($expectedTarget !== '') {
+            if (preg_match('/^[0-9a-f]{40}$/D', $expectedTarget) !== 1) {
+                throw new ReleaseException('RELEASE_EXPECTED_TARGET must be a full lowercase 40-character commit ID.');
+            }
+            if ($entry->commit !== $expectedTarget) {
+                throw new ReleaseException("Successful CI commit {$expectedTarget} does not match release target {$entry->commit}.");
+            }
+        }
+
+        $token = self::environment('RELEASE_TOKEN');
+        $candidate = $manifest->withAppended($entry);
+        $github = new HttpGitHubClient($repository, $token);
+        (new Validator($git, $github, $mainRef))->validate($candidate, $manifest);
+        (new GitLedgerPublisher($root, $repository, $token))->append($manifest, $entry);
+        fwrite(STDOUT, "Recorded {$entry->version} -> {$entry->commit} in releases.json.\n");
+
+        return 0;
     }
 
     private static function validate(string $root): int
@@ -112,7 +222,7 @@ final class Command
 
     private static function usage(): int
     {
-        fwrite(STDERR, "Usage: php tools/release.php <validate|reconcile>\n");
+        fwrite(STDERR, "Usage: php tools/release.php <validate|validate-pr|plan|append|reconcile>\n");
 
         return 2;
     }
