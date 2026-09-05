@@ -15,84 +15,45 @@ infrastructure stays shared.
 
 ## Harbour in 5 minutes
 
-Start with a Laravel 13+ project, PHP 8.4+, and Composer. Harbour runs PHP and
-frontend tools natively, so install the PDO driver for your chosen database and
-Node when the project uses Vite. If Harbour should provide services with Docker
-Compose, make sure `docker compose version` works first.
+Requires Laravel 13+, PHP 8.4+, Composer, and Node for Vite. Host PHP needs the
+PDO driver for your chosen database. Docker is needed only when you choose
+Docker Compose services.
 
-### 1. Install Harbour
-
-Run these commands in your Laravel project's primary checkout:
+### Once, in the primary checkout
 
 ```bash
 composer require --dev pickeringtech/harbour
 php artisan workspace:install
 ```
 
-The first command adds Harbour as a development dependency. The second opens
-the installer and prepares this project for isolated workspaces.
+Choose auto-detection or select the services yourself. Choose Docker Compose if
+Harbour should provide them. Accept setup, dependency installation when
+offered, and **Launch Laravel and Vite now?** Harbour prints the application
+URL when it is ready.
 
-### 2. Choose your services
+Press Ctrl+C to stop Laravel and Vite, then commit the project files Harbour
+lists. This shares the Harbour policy with every worktree; local workspace
+state stays gitignored.
 
-Use the arrow keys, Enter, and Space to make your selections:
-
-1. Choose **Auto-detect from this project** when the project already uses Sail,
-   Herd, or Compose. Choose **Choose components manually** when you want to pick
-   the database, cache, mail, and optional services yourself.
-2. Answer **Yes** to **Use Docker Compose for these service-backed components?**
-   when Harbour should create and run them for you. Otherwise, Harbour connects
-   to infrastructure you already run.
-3. If prompted, answer **Yes** to install missing Laravel integration packages.
-   Harbour installs them together with one Composer command.
-4. Answer **Yes** when asked to set up the workspace, and again when asked to
-   launch Laravel and Vite.
-
-Harbour prints the application URL when it is ready. Open that URL and work as
-normal. Press Ctrl+C to stop Laravel and Vite; your selected infrastructure
-stays ready.
-
-### 3. Commit the project policy
-
-After stopping the first development session, review and commit the files the
-installer listed:
-
-```bash
-git status --short
-git add .env.harbour config/harbour.php .gitignore composer.json composer.lock
-# If the installer created it:
-git add docker-compose.harbour.yml
-git commit -m "Configure Harbour"
-```
-
-These files tell every checkout which services and isolation rules to use.
-Harbour's workspace state remains local and gitignored.
-
-### 4. Start any later clone or worktree
-
-After the generated project policy has been committed, enter any new checkout
-and run:
+### On each parallel agent worktree
 
 ```bash
 composer install
 composer workspace:dev
 ```
 
-`composer install` restores that checkout's dependencies. `workspace:dev`
-creates or reconciles its isolated environment, then runs Laravel and Vite on
-their allocated ports.
+The first command installs that checkout's dependencies. The second creates its
+isolated ports, database, namespaces, and `.env`, then launches Laravel and
+Vite. Press Ctrl+C to stop them.
 
-### 5. Clean up before deleting a checkout
+### Before removing a worktree
 
 ```bash
 composer workspace:teardown -- --force
 ```
 
-This removes only resources Harbour can prove belong to this workspace,
-releases its ports, and restores the previous `.env`. `--force` skips the
-confirmation prompt; it does not weaken Harbour's ownership checks.
-
-That is the complete happy path. Read on for how the isolation works and how to
-customize each step.
+This removes only that worktree's Harbour-owned resources and restores its
+previous `.env`. It does not touch another worktree or shared infrastructure.
 
 ## Why Harbour
 
