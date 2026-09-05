@@ -13,6 +13,89 @@ Redis namespaces, sessions, queues, and environment—without launching another
 complete PHP, database, Redis, and Node stack. PHP and Node stay native; shared
 infrastructure stays shared.
 
+## Harbour in 5 minutes
+
+Start with a Laravel 13+ project, PHP 8.4+, and Composer. Harbour runs PHP and
+frontend tools natively, so install the PDO driver for your chosen database and
+Node when the project uses Vite. If Harbour should provide services with Docker
+Compose, make sure `docker compose version` works first.
+
+### 1. Install Harbour
+
+Run these commands in your Laravel project's primary checkout:
+
+```bash
+composer require --dev pickeringtech/harbour
+php artisan workspace:install
+```
+
+The first command adds Harbour as a development dependency. The second opens
+the installer and prepares this project for isolated workspaces.
+
+### 2. Choose your services
+
+Use the arrow keys, Enter, and Space to make your selections:
+
+1. Choose **Auto-detect from this project** when the project already uses Sail,
+   Herd, or Compose. Choose **Choose components manually** when you want to pick
+   the database, cache, mail, and optional services yourself.
+2. Answer **Yes** to **Use Docker Compose for these service-backed components?**
+   when Harbour should create and run them for you. Otherwise, Harbour connects
+   to infrastructure you already run.
+3. If prompted, answer **Yes** to install missing Laravel integration packages.
+   Harbour installs them together with one Composer command.
+4. Answer **Yes** when asked to set up the workspace, and again when asked to
+   launch Laravel and Vite.
+
+Harbour prints the application URL when it is ready. Open that URL and work as
+normal. Press Ctrl+C to stop Laravel and Vite; your selected infrastructure
+stays ready.
+
+### 3. Commit the project policy
+
+After stopping the first development session, review and commit the files the
+installer listed:
+
+```bash
+git status --short
+git add .env.harbour config/harbour.php .gitignore composer.json composer.lock
+# If the installer created it:
+git add docker-compose.harbour.yml
+git commit -m "Configure Harbour"
+```
+
+These files tell every checkout which services and isolation rules to use.
+Harbour's workspace state remains local and gitignored.
+
+### 4. Start any later clone or worktree
+
+After the generated project policy has been committed, enter any new checkout
+and run:
+
+```bash
+composer install
+composer workspace:dev
+```
+
+`composer install` restores that checkout's dependencies. `workspace:dev`
+creates or reconciles its isolated environment, then runs Laravel and Vite on
+their allocated ports.
+
+### 5. Clean up before deleting a checkout
+
+```bash
+composer workspace:teardown -- --force
+```
+
+This removes only resources Harbour can prove belong to this workspace,
+releases its ports, and restores the previous `.env`. `--force` skips the
+confirmation prompt; it does not weaken Harbour's ownership checks.
+
+That is the complete happy path. Read on for how the isolation works and how to
+customize each step.
+
+## Why Harbour
+
 <!-- harbour:diagram id="shared-infrastructure" alt="Without Harbour, each worktree runs a full stack. With Harbour, native worktrees use isolated namespaces on shared infrastructure." -->
 ```mermaid
 flowchart LR
@@ -62,7 +145,7 @@ every checkout is unnecessarily heavyweight. Harbour keeps the native Laravel
 workflow and shares infrastructure while isolating each workspace's mutable
 state. The two tools serve different development modes and work well together.
 
-## Install
+## Installation details
 
 Run these once in the Laravel project's primary checkout:
 
@@ -150,7 +233,7 @@ launch prompt. The main groups also accept `-d`, `-c`, and `-m`. See the
 [installation guide](https://pickeringtech.github.io/harbour/getting-started/)
 for the supported Sail-compatible services and exact detection rules.
 
-## Five-minute workflow
+## Daily worktree workflow
 
 Commit the project-level files created by `workspace:install`. Then a new clone
 or worktree needs only:

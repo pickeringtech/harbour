@@ -6,6 +6,11 @@ All notable changes will be documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The README now opens with a direct five-minute path from installation through
+  service selection, application launch, later worktrees, and safe teardown.
+
 ## [0.0.7] - 2026-09-05
 
 ### Changed
