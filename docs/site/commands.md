@@ -171,3 +171,23 @@ composer workspace:teardown -- --force
 Purpose: remove this checkout's Harbour-owned resources, release its ports, restore its previous `.env`, and delete its state file.
 
 The Composer `--` forwards `--force` to Artisan. Force means “do not prompt,” never “ignore safety.”
+
+## `workspace:uninstall`
+
+```bash
+composer workspace:uninstall -- --force
+```
+
+Purpose: reverse Harbour adoption safely. The command first performs normal
+ownership-checked teardown and restores the previous `.env`. It then removes
+only files carrying Harbour's generated marker, the exact Harbour-owned
+`.gitignore` block, and exact Harbour Composer aliases. Unmarked replacement
+files, modified ownership blocks, and project-authored aliases are retained and
+reported. Deliberate edits inside a still-marked generated policy file remain
+part of that policy and are removed with it.
+
+The package dependency is intentionally a separate, transparent final step:
+
+```bash
+composer remove --dev pickeringtech/harbour
+```

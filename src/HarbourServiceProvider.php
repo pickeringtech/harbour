@@ -17,6 +17,7 @@ use PickeringTech\Harbour\Console\RenderCommand;
 use PickeringTech\Harbour\Console\SetupCommand;
 use PickeringTech\Harbour\Console\StatusCommand;
 use PickeringTech\Harbour\Console\TeardownCommand;
+use PickeringTech\Harbour\Console\UninstallCommand;
 use PickeringTech\Harbour\Contracts\ApplicationLauncher;
 use PickeringTech\Harbour\Contracts\CommandRunner;
 use PickeringTech\Harbour\Contracts\InstallationDependencyInstaller;
@@ -45,6 +46,7 @@ use PickeringTech\Harbour\Installation\ArtisanWorkspaceStarter;
 use PickeringTech\Harbour\Installation\ComposerDependencyInstaller;
 use PickeringTech\Harbour\Installation\ProjectConfigurationDetector;
 use PickeringTech\Harbour\Installation\ProjectInstaller;
+use PickeringTech\Harbour\Installation\ProjectUninstaller;
 use PickeringTech\Harbour\Installation\SystemInstallationPreflight;
 use PickeringTech\Harbour\Lifecycle\DatabaseLifecycle;
 use PickeringTech\Harbour\Lifecycle\ManagedInfrastructure;
@@ -105,6 +107,7 @@ final class HarbourServiceProvider extends ServiceProvider
         });
         $this->app->singleton(EnvironmentManager::class, fn (Application $app): EnvironmentManager => new EnvironmentManager($this->workspacePath($app)));
         $this->app->singleton(ProjectInstaller::class, fn (Application $app): ProjectInstaller => new ProjectInstaller($this->workspacePath($app)));
+        $this->app->singleton(ProjectUninstaller::class, fn (Application $app): ProjectUninstaller => new ProjectUninstaller($this->workspacePath($app)));
         $this->app->singleton(InstallationDependencyInstaller::class, fn (Application $app): InstallationDependencyInstaller => new ComposerDependencyInstaller(
             $this->workspacePath($app),
             $app->make(CommandRunner::class),
@@ -209,6 +212,7 @@ final class HarbourServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 InstallCommand::class,
+                UninstallCommand::class,
                 SetupCommand::class,
                 TeardownCommand::class,
                 StatusCommand::class,
