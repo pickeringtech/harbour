@@ -135,6 +135,18 @@ final class ProjectUninstallerTest extends TestCase
         self::assertSame('{"scripts":{"test":"phpunit"},"extra":{"keep":true}}', file_get_contents($this->workspace.'/composer.json'));
     }
 
+    public function test_it_can_remove_the_only_ignore_block_and_the_only_compact_script(): void
+    {
+        file_put_contents($this->workspace.'/.gitignore', "# Harbour workspace state\n/.harbour.json\n/.harbour/\n");
+        file_put_contents($this->workspace.'/composer.json', '{"scripts":{"workspace:setup":["@php artisan workspace:setup"]}}');
+
+        $result = (new ProjectUninstaller($this->workspace))->uninstall();
+
+        self::assertContains('.gitignore Harbour block', $result->removed);
+        self::assertSame('', file_get_contents($this->workspace.'/.gitignore'));
+        self::assertSame('{"scripts":{}}', file_get_contents($this->workspace.'/composer.json'));
+    }
+
     public function test_it_reports_absent_policy_without_rewriting_project_content(): void
     {
         $composer = (string) file_get_contents($this->workspace.'/composer.json');

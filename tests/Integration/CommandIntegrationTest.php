@@ -573,6 +573,26 @@ final class CommandIntegrationTest extends TestCase
         self::assertSame("ORIGINAL=yes\n", file_get_contents($this->workspaceDirectory.'/.env'));
     }
 
+    public function test_uninstall_reports_removed_and_retained_policy_in_human_output(): void
+    {
+        unlink($this->workspaceDirectory.'/.env.harbour');
+        file_put_contents($this->workspaceDirectory.'/composer.json', "{\n    \"name\": \"acme/app\"\n}\n");
+        (new ProjectInstaller($this->workspaceDirectory))->install(new InstallationSelection('none', 'file', 'log'));
+        $manifest = json_decode((string) file_get_contents($this->workspaceDirectory.'/composer.json'), true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($manifest);
+        self::assertIsArray($manifest['scripts'] ?? null);
+        $manifest['scripts']['workspace:status'] = ['project status'];
+        file_put_contents($this->workspaceDirectory.'/composer.json', json_encode($manifest, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR)."\n");
+
+        self::assertSame(0, Artisan::call('workspace:uninstall', ['--force' => true]));
+
+        $output = Artisan::output();
+        self::assertStringContainsString('managed project configuration removed', $output);
+        self::assertStringContainsString('Removed .env.harbour', $output);
+        self::assertStringContainsString('Retained composer.json scripts.workspace:status', $output);
+        self::assertStringContainsString('composer remove --dev pickeringtech/harbour', $output);
+    }
+
     public function test_non_interactive_destructive_commands_require_force(): void
     {
         $manager = $this->application()->make(WorkspaceManager::class);
