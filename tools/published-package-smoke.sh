@@ -96,7 +96,7 @@ exit(1);
     --json) > "${smoke_root}/install.json"
 php -r '$result = json_decode(file_get_contents($argv[1]), true, flags: JSON_THROW_ON_ERROR); exit(($result["ok"] ?? false) && ($result["installation"]["started"] ?? false) ? 0 : 1);' "${smoke_root}/install.json"
 
-(cd "${application}" && setsid composer workspace:dev) > "${smoke_root}/dev.log" 2>&1 &
+(cd "${application}" && LARAVEL_BYPASS_ENV_CHECK=1 setsid composer workspace:dev) > "${smoke_root}/dev.log" 2>&1 &
 dev_pid=$!
 app_port="$(state_port APP_PORT)"
 vite_port="$(state_port VITE_PORT)"

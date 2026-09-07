@@ -88,7 +88,7 @@ test "$(sha256sum "${application}/.env.harbour" | cut -d ' ' -f 1)" = "$(<"${upg
 test "$(sha256sum "${application}/config/harbour.php" | cut -d ' ' -f 1)" = "$(<"${upgrade_root}/config.sha256")"
 (cd "${application}" && composer workspace:setup)
 
-(cd "${application}" && setsid composer workspace:dev) > "${upgrade_root}/dev.log" 2>&1 &
+(cd "${application}" && LARAVEL_BYPASS_ENV_CHECK=1 setsid composer workspace:dev) > "${upgrade_root}/dev.log" 2>&1 &
 dev_pid=$!
 app_port="$(state_port APP_PORT)"
 vite_port="$(state_port VITE_PORT)"
