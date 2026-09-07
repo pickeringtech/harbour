@@ -186,8 +186,8 @@ final class ApplicationProcessPlanTest extends TestCase
 
     public function test_foreground_process_output_is_named_and_remaining_processes_are_stopped(): void
     {
-        file_put_contents($this->workspaceDirectory.'/artisan', "<?php fwrite(STDOUT, 'laravel ready'); sleep(10);\n");
-        file_put_contents($this->workspaceDirectory.'/package.json', '{"scripts":{"dev":"exit 7"},"dependencies":{"vite":"^7"}}');
+        file_put_contents($this->workspaceDirectory.'/artisan', "<?php fwrite(STDOUT, 'laravel ready'); exit(1);\n");
+        file_put_contents($this->workspaceDirectory.'/package.json', '{"scripts":{"dev":"php -r \\"sleep(10);\\" --"},"dependencies":{"vite":"^7"}}');
         mkdir($this->workspaceDirectory.'/node_modules/.bin', 0700, true);
         file_put_contents($this->workspaceDirectory.'/node_modules/.bin/vite', '');
         $workspace = $this->application()->make(WorkspaceManager::class)->setup();
