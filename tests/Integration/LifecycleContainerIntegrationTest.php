@@ -139,6 +139,23 @@ final class LifecycleContainerIntegrationTest extends TestCase
         }
     }
 
+    public function test_setup_discards_the_legacy_undeclared_vite_hot_file_default(): void
+    {
+        $manager = $this->application()->make(WorkspaceManager::class);
+        $workspace = $manager->setup();
+        $states = $this->application()->make(WorkspaceStateRepository::class);
+        $states->save($workspace->state()->withVariables([
+            ...$workspace->state()->variables,
+            'VITE_HOT_FILE' => $this->workspaceDirectory.'/.harbour/vite/hot',
+        ]));
+
+        $upgraded = $manager->setup();
+
+        self::assertNull($upgraded->variables()->get('VITE_HOT_FILE'));
+        self::assertArrayNotHasKey('VITE_HOT_FILE', $upgraded->state()->variables);
+        $manager->teardown(true);
+    }
+
     private function restoreEnvironment(string $name, string|false $value): void
     {
         putenv($value === false ? $name : $name.'='.$value);

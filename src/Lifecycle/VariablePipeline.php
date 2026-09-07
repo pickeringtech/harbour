@@ -35,6 +35,9 @@ final class VariablePipeline
     {
         $bag = new VariableBag;
         foreach ($state->variables as $name => $value) {
+            if ($includeProcessEnvironment && $this->isObsoleteDefault($name)) {
+                continue;
+            }
             $bag->put(new ResolvedVariable($name, $value, 'persisted_state'));
         }
 
@@ -127,5 +130,14 @@ final class VariablePipeline
         $configured = $this->config->projectName;
 
         return is_string($configured) && trim($configured) !== '' ? $configured : basename($this->workspacePath);
+    }
+
+    private function isObsoleteDefault(string $name): bool
+    {
+        if ($name !== 'VITE_HOT_FILE' || array_key_exists($name, $this->config->variables)) {
+            return false;
+        }
+
+        return ! in_array($name, $this->templates->variables($this->templateContents()), true);
     }
 }

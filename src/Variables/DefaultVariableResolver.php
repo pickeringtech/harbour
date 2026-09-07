@@ -28,8 +28,6 @@ final readonly class DefaultVariableResolver implements WorkspaceVariableResolve
         yield new ResolvedVariable('MONGODB_DATABASE', $this->identifiers->database($context->identity, $context->projectName), self::class);
         yield new ResolvedVariable('SEARCH_PREFIX', $this->identifiers->database($context->identity, $context->projectName).'_', self::class);
         yield new ResolvedVariable('OBJECT_STORAGE_BUCKET', $this->identifiers->bucket($context->identity, $context->projectName), self::class);
-        yield new ResolvedVariable('VITE_HOT_FILE', $context->workspacePath.'/.harbour/vite/hot', self::class);
-
         foreach ($context->ports as $name => $port) {
             yield new ResolvedVariable($name, (string) $port, 'port_allocation');
         }

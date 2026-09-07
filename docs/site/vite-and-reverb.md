@@ -27,7 +27,12 @@ npm run dev -- --host 127.0.0.1 --port "$VITE_PORT" --strictPort
 
 ### Advanced custom hot files
 
-If a project deliberately sets `VITE_HOT_FILE`, use the same value in the Laravel Vite plugin's JavaScript `hotFile` option. Harbour automatically applies the PHP-side `Vite::useHotFile` setting through its service provider; no application provider edit is needed.
+If a project deliberately configures `VITE_HOT_FILE`, provide it through
+Harbour's configured variable values and use the same value in the Laravel Vite
+plugin's JavaScript `hotFile` option. Harbour automatically applies the PHP-side
+`Vite::useHotFile` setting through its service provider; no application provider
+edit is needed. Harbour does not inject this variable by default, keeping both
+Laravel and Vite on their shared `public/hot` convention.
 
 ## Reverb
 

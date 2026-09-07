@@ -32,7 +32,7 @@ final class DefaultVariableResolverTest extends TestCase
         self::assertSame('http://127.0.0.1:8123', $values['APP_URL']);
         self::assertSame('acme_feature_login_a1b2c3d4', $values['DB_DATABASE']);
         self::assertSame('9123', $values['VITE_PORT']);
-        self::assertSame('/project/.harbour/vite/hot', $values['VITE_HOT_FILE']);
+        self::assertArrayNotHasKey('VITE_HOT_FILE', $values);
         self::assertSame('acme_feature_login_a1b2c3d4_fa73bfb1:queue', $values['QUEUE_NAME']);
         self::assertSame($values['QUEUE_NAME'], $values['REDIS_QUEUE']);
         self::assertSame('acme_feature_login_a1b2c3d4_fa73bfb1:', $values['REDIS_PREFIX']);
