@@ -26,6 +26,7 @@ const pages = [
     { route: 'lifecycle-hooks', source: 'docs/site/lifecycle-hooks.md', title: 'Lifecycle hooks', description: 'Extend setup and teardown through deterministic hooks and Laravel events.' },
     { route: 'custom-strategies', source: 'docs/site/custom-strategies.md', title: 'Custom strategies', description: 'Replace identity, port allocation, and variable resolution through Laravel DI.' },
     { route: 'debugging', source: 'docs/site/debugging.md', title: 'Debugging', description: 'Inspect status, variable provenance, machine output, and partial failures.' },
+    { route: 'support-matrix', source: 'docs/site/support-matrix.md', title: 'Support matrix', description: 'See exactly which integrations Harbour proves end-to-end, at runtime, or through configuration generation.' },
     { route: 'integrations', source: 'docs/site/integrations.md', title: 'Integrations', description: 'Use Harbour with Git worktrees, Orca, Herdr, Sail, Docker, and Compose.' },
     { route: 'orca', source: 'docs/site/orca.md', title: 'Orca', description: 'Connect Orca worktree lifecycle to Harbour workspace setup and teardown.' },
     { route: 'herdr', source: 'docs/site/herdr.md', title: 'Herdr', description: 'Connect Herdr worktrees and services to Harbour safely.' },
