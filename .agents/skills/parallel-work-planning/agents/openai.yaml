@@ -1,0 +1,3 @@
+interface:
+  display_name: "Parallel Work Planning"
+  short_description: "Sequence tickets into dependency stages and parallel work lanes"
