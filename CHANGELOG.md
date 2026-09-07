@@ -8,6 +8,9 @@ All notable changes will be documented here. The format follows
 
 ### Added
 
+- First-class Worktrunk `0.76.x` integration adds opt-in, project-scoped,
+  blocking setup and pre-removal hooks validated and lifecycle-tested with the
+  real pinned `wt` release.
 - `workspace:uninstall` reverses adoption by tearing down owned resources,
   restoring `.env`, and removing only provably Harbour-managed project policy.
 - Published-package smoke and previous-release upgrade jobs verify the package

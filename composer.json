@@ -66,8 +66,9 @@
         "test": "phpunit",
         "test:unit": "phpunit --testsuite=Unit",
         "test:integration": "phpunit --testsuite=Integration",
-        "fuzz": "phpunit tests/Unit/IdentifierPropertyTest.php tests/Unit/InstallationDiscoveryPropertyTest.php",
+        "fuzz": "phpunit tests/Unit/IdentifierPropertyTest.php tests/Unit/InstallationDiscoveryPropertyTest.php tests/Unit/WorktrunkConfigurationPropertyTest.php",
         "acceptance": "bash tools/acceptance-test.sh",
+        "acceptance:worktrunk": "bash tools/worktrunk-acceptance-test.sh",
         "coverage": [
             "phpunit --coverage-clover build/coverage.xml --coverage-text",
             "@php tools/check-coverage.php build/coverage.xml 95"

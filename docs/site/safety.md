@@ -48,6 +48,14 @@ Package removal remains a separate, transparent Composer operation because an
 installed package cannot reliably remove itself while Composer is changing the
 dependency graph.
 
+## External worktree lifecycle
+
+An external tool must run Harbour teardown before deleting a checkout because
+the ownership evidence is stored inside that checkout. Worktrunk integration
+therefore uses blocking `pre-remove`; failure aborts deletion. Harbour never
+schedules destructive cleanup in `post-remove`, never interpolates a raw path or
+branch into a shell command, and never creates or deletes the worktree itself.
+
 ## Production protection
 
 Harbour is intended as a development dependency and is enabled by default only

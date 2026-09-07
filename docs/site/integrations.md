@@ -41,6 +41,22 @@ orca worktree rm --worktree active --force --json
 
 Harbour does not detect Orca or depend on it.
 
+## Worktrunk
+
+See the complete [Worktrunk guide](/worktrunk/).
+
+Worktrunk is the first-class headless lifecycle integration. Opt in with:
+
+```bash
+php artisan workspace:install --detect --worktree-hooks=worktrunk --no-interaction
+```
+
+Its blocking `pre-start` pipeline installs Composer dependencies before setup.
+Its blocking `pre-remove` hook tears down the Harbour environment while the
+checkout and ownership state still exist. The real pinned `wt` release validates
+configuration and exercises create, remove, teardown-failure, concurrency, and
+merge paths in CI.
+
 ## Herdr
 
 See the complete [Herdr recipe](/herdr/).

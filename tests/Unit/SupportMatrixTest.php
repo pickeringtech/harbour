@@ -36,13 +36,16 @@ final class SupportMatrixTest extends TestCase
         $levels = $matrix['levels'] ?? null;
         $selections = $matrix['selections'] ?? null;
         $platforms = $matrix['platforms'] ?? null;
+        $worktreeIntegrations = $matrix['worktree_integrations'] ?? null;
         self::assertSame(1, $matrix['schema'] ?? null);
         self::assertIsArray($levels);
         self::assertIsArray($selections);
         self::assertIsArray($platforms);
+        self::assertIsArray($worktreeIntegrations);
+        self::assertSame(['worktrunk'], array_keys($worktreeIntegrations));
         self::assertSame(['linux', 'macos', 'windows'], array_keys($platforms));
 
-        foreach ([...$selections, 'platforms' => $platforms] as $group => $entries) {
+        foreach ([...$selections, 'worktree_integrations' => $worktreeIntegrations, 'platforms' => $platforms] as $group => $entries) {
             self::assertIsArray($entries);
             foreach ($entries as $name => $entry) {
                 self::assertIsArray($entry);

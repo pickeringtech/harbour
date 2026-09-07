@@ -325,6 +325,40 @@ jobs:
       - name: Upgrade a live workspace to the candidate
         run: bash tools/upgrade-test.sh "${{ steps.previous.outputs.version }}" "${{ github.workspace }}"
 
+  worktrunk:
+    name: Worktrunk v0.76.0 lifecycle
+    runs-on: ubuntu-latest
+    env:
+      HARBOUR_WORKTRUNK_INTEGRATION: '1'
+      HARBOUR_WORKTRUNK_BINARY: ${{ github.workspace }}/build/worktrunk/wt
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite
+          coverage: none
+      - uses: ramsey/composer-install@65e4f84970763564f46a70b8a54b90d033b3bdda # 4.0.0
+      - name: Install pinned Worktrunk release
+        run: |
+          mkdir -p build/worktrunk/archive
+          curl --fail --location --silent --show-error \
+            https://github.com/max-sixty/worktrunk/releases/download/v0.76.0/worktrunk-x86_64-unknown-linux-musl.tar.xz \
+            --output build/worktrunk/archive/worktrunk-x86_64-unknown-linux-musl.tar.xz
+          curl --fail --location --silent --show-error \
+            https://github.com/max-sixty/worktrunk/releases/download/v0.76.0/worktrunk-x86_64-unknown-linux-musl.tar.xz.sha256 \
+            --output build/worktrunk/archive/worktrunk-x86_64-unknown-linux-musl.tar.xz.sha256
+          cd build/worktrunk/archive
+          sha256sum --check worktrunk-x86_64-unknown-linux-musl.tar.xz.sha256
+          tar --extract --xz --file worktrunk-x86_64-unknown-linux-musl.tar.xz
+          mv worktrunk-x86_64-unknown-linux-musl/wt ../wt
+          ../wt --version | grep -Fx 'wt v0.76.0'
+          echo "${{ github.workspace }}/build/worktrunk" >> "${GITHUB_PATH}"
+      - run: vendor/bin/phpunit tests/Integration/WorktrunkLifecycleIntegrationTest.php
+      - run: composer acceptance:worktrunk
+
   acceptance:
     name: Two-worktree acceptance
     runs-on: ubuntu-latest

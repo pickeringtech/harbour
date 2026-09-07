@@ -56,6 +56,16 @@ runtime proof that CI does not yet possess. Each service should move upward only
 when an automated test starts the real image, connects through Laravel where
 applicable, demonstrates isolated use, and proves teardown.
 
+## Worktree lifecycle integrations
+
+| Selection | Evidence | What CI proves |
+| --- | --- | --- |
+| Worktrunk `0.76.x` | End-to-end | The real pinned `wt` validator accepts generated TOML. Real Worktrunk creation orders Composer before setup, two worktrees retain independent ownership state, teardown failure blocks deletion, successful removal leaves the sibling intact, and merge invokes blocking pre-remove. |
+
+Worktrunk is the reference first-class headless adapter. Orca and Herdr remain
+documented manual recipes until their separate lifecycle contracts satisfy the
+same automated support gate.
+
 ## Providers and platforms
 
 Shared infrastructure and generated Docker Compose are both exercised

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PickeringTech\Harbour\Console;
 
 use PickeringTech\Harbour\Installation\ProjectUninstaller;
+use PickeringTech\Harbour\Integrations\Worktrunk\WorktrunkIntegration;
 use PickeringTech\Harbour\WorkspaceManager;
 
 final class UninstallCommand extends WorkspaceCommand
@@ -13,11 +14,11 @@ final class UninstallCommand extends WorkspaceCommand
 
     protected $description = 'Tear down this workspace and remove Harbour-managed project configuration';
 
-    public function handle(WorkspaceManager $manager, ProjectUninstaller $uninstaller): int
+    public function handle(WorkspaceManager $manager, ProjectUninstaller $uninstaller, WorktrunkIntegration $worktrunk): int
     {
         $json = (bool) $this->option('json');
 
-        return $this->executeSafely($json, function () use ($manager, $uninstaller, $json): int {
+        return $this->executeSafely($json, function () use ($manager, $uninstaller, $worktrunk, $json): int {
             $force = (bool) $this->option('force');
             if (! $this->confirmForcedOperation(
                 $force,
@@ -29,7 +30,9 @@ final class UninstallCommand extends WorkspaceCommand
             }
 
             $manager->teardown($force);
+            $worktrunkResult = $worktrunk->uninstall();
             $result = $uninstaller->uninstall();
+            $result = $result->withProjectFile(WorktrunkIntegration::CONFIGURATION_PATH, $worktrunkResult->change);
             if ($json) {
                 $this->line((string) json_encode([
                     'version' => 1,
