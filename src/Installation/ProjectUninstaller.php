@@ -60,7 +60,7 @@ final readonly class ProjectUninstaller
         }
         WorkspacePath::assertSafe($this->workspacePath, $path);
 
-        $contents = file_get_contents($path);
+        $contents = @file_get_contents($path);
         if ($contents === false) {
             $retained[] = $relative.' (unreadable)';
 
@@ -98,7 +98,7 @@ final readonly class ProjectUninstaller
         }
         WorkspacePath::assertSafe($this->workspacePath, $path);
 
-        $contents = file_get_contents($path);
+        $contents = @file_get_contents($path);
         if ($contents === false) {
             $retained[] = $relative.' (unreadable)';
 
@@ -150,7 +150,7 @@ final readonly class ProjectUninstaller
             return;
         }
         WorkspacePath::assertSafe($this->workspacePath, $path);
-        $contents = file_get_contents($path);
+        $contents = @file_get_contents($path);
         if ($contents === false) {
             $retained[] = $relative.' (unreadable)';
 
