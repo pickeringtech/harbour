@@ -42,7 +42,7 @@ final class SupportMatrixTest extends TestCase
         self::assertIsArray($selections);
         self::assertIsArray($platforms);
         self::assertIsArray($worktreeIntegrations);
-        self::assertSame(['worktrunk'], array_keys($worktreeIntegrations));
+        self::assertSame(['orca', 'worktrunk'], array_keys($worktreeIntegrations));
         self::assertSame(['linux', 'macos', 'windows'], array_keys($platforms));
 
         foreach ([...$selections, 'worktree_integrations' => $worktreeIntegrations, 'platforms' => $platforms] as $group => $entries) {

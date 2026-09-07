@@ -1,0 +1,6 @@
+# Keep this comment and command.
+scripts:
+  lint: composer format:check
+  setup: composer install --no-interaction && composer workspace:setup
+defaultTabs:
+  - title: Shell

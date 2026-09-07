@@ -8,6 +8,9 @@ All notable changes will be documented here. The format follows
 
 ### Added
 
+- Orca lifecycle groundwork adds explicit `orca.yaml` selection, safe YAML
+  merging, capability/status reporting, and a real-runtime contract probe. The
+  integration remains fail-closed until Orca propagates archive-hook failures.
 - First-class Worktrunk `0.76.x` integration adds opt-in, project-scoped,
   blocking setup and pre-removal hooks validated and lifecycle-tested with the
   real pinned `wt` release.

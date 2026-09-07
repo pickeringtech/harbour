@@ -113,7 +113,13 @@ final class WorktrunkCommandIntegrationTest extends TestCase
         self::assertStringContainsString('"capability":"full_lifecycle"', $status);
         self::assertStringContainsString('"version":"0.76.0"', $status);
         self::assertStringContainsString('"configuration":"partial"', $status);
-        self::assertStringNotContainsString('"conflicts":[]', $status);
+        $decoded = json_decode($status, true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($decoded);
+        $integrations = $decoded['worktree_integrations'] ?? null;
+        self::assertIsArray($integrations);
+        $integration = $integrations['worktrunk'] ?? null;
+        self::assertIsArray($integration);
+        self::assertNotSame([], $integration['conflicts'] ?? []);
     }
 }
 

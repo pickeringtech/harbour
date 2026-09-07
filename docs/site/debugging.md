@@ -8,8 +8,9 @@ php artisan workspace:status --json
 ```
 
 Status reads `.harbour.json`; it does not scan repositories or enumerate every Docker resource on the machine.
-When `.config/wt.toml` exists, the same response includes Worktrunk capability,
-version support, configured setup/teardown stages, and configuration conflicts.
+The same response includes Orca and Worktrunk capability/version support,
+configured setup/teardown stages, configuration ownership, and conflicts. Orca
+status also reminds automation that removal requires `--run-hooks`.
 
 Inspect variable provenance:
 

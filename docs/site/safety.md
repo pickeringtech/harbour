@@ -51,10 +51,12 @@ dependency graph.
 ## External worktree lifecycle
 
 An external tool must run Harbour teardown before deleting a checkout because
-the ownership evidence is stored inside that checkout. Worktrunk integration
-therefore uses blocking `pre-remove`; failure aborts deletion. Harbour never
-schedules destructive cleanup in `post-remove`, never interpolates a raw path or
-branch into a shell command, and never creates or deletes the worktree itself.
+the ownership evidence is stored inside that checkout. Worktrunk uses blocking
+`pre-remove`, where failure aborts deletion. Orca's current `scripts.archive`
+hook does not abort deletion after failure, so Harbour refuses to enable that
+adapter. Harbour never schedules destructive post-removal cleanup, never
+interpolates a raw path or branch into a shell command, and never creates or
+deletes the worktree itself.
 
 ## Production protection
 
