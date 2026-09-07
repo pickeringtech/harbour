@@ -2,14 +2,22 @@
 
 declare(strict_types=1);
 
-if ($argc !== 3 || ! is_numeric($argv[2]) || (float) $argv[2] < 0 || (float) $argv[2] > 100) {
-    fwrite(STDERR, "Usage: php tools/check-coverage.php <clover.xml> <minimum-percent>\n");
+if ($argc !== 2) {
+    fwrite(STDERR, "Usage: php tools/check-coverage.php <clover.xml>\n");
 
     exit(2);
 }
 
 $path = $argv[1];
-$minimum = (float) $argv[2];
+$configurationPath = dirname(__DIR__).'/composer.json';
+$configuration = json_decode((string) @file_get_contents($configurationPath), true);
+$minimum = is_array($configuration) ? ($configuration['extra']['harbour']['coverage-minimum'] ?? null) : null;
+
+if (! is_int($minimum) || $minimum < 0 || $minimum > 100) {
+    fwrite(STDERR, "Coverage threshold in [composer.json] must be an integer from 0 to 100.\n");
+
+    exit(2);
+}
 
 if (! is_file($path)) {
     fwrite(STDERR, "Coverage report [{$path}] does not exist.\n");
@@ -43,8 +51,17 @@ foreach ($nodes as $node) {
     if (! $node instanceof DOMElement) {
         continue;
     }
-    $statements += (int) $node->getAttribute('statements');
-    $covered += (int) $node->getAttribute('coveredstatements');
+    $nodeStatements = $node->getAttribute('statements');
+    $nodeCovered = $node->getAttribute('coveredstatements');
+    if (preg_match('/\A\d+\z/', $nodeStatements) !== 1
+        || preg_match('/\A\d+\z/', $nodeCovered) !== 1
+        || (int) $nodeCovered > (int) $nodeStatements) {
+        fwrite(STDERR, "Coverage report [{$path}] contains invalid statement metrics.\n");
+
+        exit(2);
+    }
+    $statements += (int) $nodeStatements;
+    $covered += (int) $nodeCovered;
 }
 
 if ($statements === 0) {
@@ -55,14 +72,14 @@ if ($statements === 0) {
 
 $percentage = $covered / $statements * 100;
 $summary = sprintf(
-    'Line coverage: %.2f%% (%d/%d); required: %.2f%%',
+    'Statement coverage: %.2f%% (%d/%d); required: %.2f%%',
     $percentage,
     $covered,
     $statements,
     $minimum,
 );
 
-if ($percentage + PHP_FLOAT_EPSILON < $minimum) {
+if ($covered * 100 < $minimum * $statements) {
     fwrite(STDERR, $summary."\nCoverage threshold not met.\n");
 
     exit(1);

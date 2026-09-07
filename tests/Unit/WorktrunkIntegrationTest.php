@@ -350,6 +350,75 @@ final class WorktrunkIntegrationTest extends TestCase
         self::assertSame('unchanged', $integration->prepare()->change);
     }
 
+    public function test_filesystem_failures_leave_worktrunk_configuration_unclaimed(): void
+    {
+        $runner = new FakeWorktrunkRunner($this->workspace);
+        $integration = new WorktrunkIntegration($this->workspace, $runner);
+        $installation = $integration->prepare();
+        file_put_contents($this->workspace.'/.config', 'directory blocker');
+
+        try {
+            $integration->install($installation);
+            self::fail('A blocked configuration directory must fail installation.');
+        } catch (HarbourException $exception) {
+            self::assertSame(ErrorCode::UnsafeOperation, $exception->errorCode);
+        }
+
+        unlink($this->workspace.'/.config');
+        mkdir($this->workspace.'/.config');
+        file_put_contents($this->workspace.'/.config/wt.toml', $installation->contents);
+        chmod($this->workspace.'/.config/wt.toml', 0000);
+        try {
+            self::assertSame('retained', $integration->uninstall()->change);
+            try {
+                $integration->prepare();
+                self::fail('Unreadable configuration must fail preparation.');
+            } catch (HarbourException $exception) {
+                self::assertSame(ErrorCode::UnsafeOperation, $exception->errorCode);
+            }
+        } finally {
+            chmod($this->workspace.'/.config/wt.toml', 0600);
+        }
+
+        chmod($this->workspace.'/.config', 0500);
+        try {
+            $integration->uninstall();
+            self::fail('An undeletable managed configuration must fail uninstallation.');
+        } catch (HarbourException $exception) {
+            self::assertSame(ErrorCode::UnsafeOperation, $exception->errorCode);
+        } finally {
+            chmod($this->workspace.'/.config', 0700);
+        }
+    }
+
+    public function test_temporary_file_failure_is_reported_before_candidate_validation(): void
+    {
+        $integration = new WorktrunkIntegration(
+            $this->workspace,
+            new FakeWorktrunkRunner($this->workspace),
+            temporaryFile: static fn (): false => false,
+        );
+
+        try {
+            $integration->prepare();
+            self::fail('A missing temporary file must fail candidate validation.');
+        } catch (HarbourException $exception) {
+            self::assertSame(ErrorCode::UnsafeOperation, $exception->errorCode);
+        }
+    }
+
+    public function test_scalar_project_configuration_is_treated_as_empty(): void
+    {
+        mkdir($this->workspace.'/.config');
+        file_put_contents($this->workspace.'/.config/wt.toml', "# existing\n");
+        $runner = new FakeWorktrunkRunner($this->workspace);
+        $runner->projectResult = new ProcessResult(0, (string) json_encode([
+            'project' => ['config' => 'invalid', 'path' => $this->workspace.'/.config/wt.toml'],
+        ], JSON_THROW_ON_ERROR));
+
+        self::assertSame('updated', (new WorktrunkIntegration($this->workspace, $runner))->prepare()->change);
+    }
+
     /** @return array<string, mixed> */
     private static function equivalentConfiguration(): array
     {

@@ -121,41 +121,33 @@ final readonly class SystemInstallationPreflight implements InstallationPrefligh
     private function serviceRequirements(InstallationSelection $selection, array &$missing): void
     {
         foreach ($selection->additionalServices as $service) {
-            match ($service) {
-                'meilisearch' => $this->requirePackages([
-                    ['laravel/scout', 'Laravel to configure searchable models for Meilisearch', 'composer require laravel/scout'],
-                    ['meilisearch/meilisearch-php', 'Laravel Scout to communicate with Meilisearch', 'composer require meilisearch/meilisearch-php'],
-                ], $missing),
-                'typesense' => $this->requirePackages([
-                    ['laravel/scout', 'Laravel to configure searchable models for Typesense', 'composer require laravel/scout'],
-                    ['typesense/typesense-php', 'Laravel Scout to communicate with Typesense', 'composer require typesense/typesense-php'],
-                ], $missing),
-                'minio', 'rustfs' => $this->requirePackage(
-                    'league/flysystem-aws-s3-v3',
-                    'Laravel Filesystem to use the selected S3-compatible object store',
-                    'composer require league/flysystem-aws-s3-v3',
-                    $missing,
-                ),
-                'rabbitmq' => $this->requirePackage(
-                    'vladimir-yuldashev/laravel-queue-rabbitmq',
-                    'Laravel to provide the selected RabbitMQ queue driver',
-                    'composer require vladimir-yuldashev/laravel-queue-rabbitmq',
-                    $missing,
-                ),
-                'selenium' => $this->requirePackage(
-                    'laravel/dusk',
-                    'Laravel to drive the selected Selenium browser service',
-                    'composer require --dev laravel/dusk',
-                    $missing,
-                ),
-                'soketi' => $this->requirePackage(
-                    'pusher/pusher-php-server',
-                    'Laravel broadcasting to communicate with the selected Soketi service',
-                    'composer require pusher/pusher-php-server',
-                    $missing,
-                ),
-                default => null,
-            };
+            switch ($service) {
+                case 'meilisearch':
+                    $this->requirePackages([
+                        ['laravel/scout', 'Laravel to configure searchable models for Meilisearch', 'composer require laravel/scout'],
+                        ['meilisearch/meilisearch-php', 'Laravel Scout to communicate with Meilisearch', 'composer require meilisearch/meilisearch-php'],
+                    ], $missing);
+                    break;
+                case 'typesense':
+                    $this->requirePackages([
+                        ['laravel/scout', 'Laravel to configure searchable models for Typesense', 'composer require laravel/scout'],
+                        ['typesense/typesense-php', 'Laravel Scout to communicate with Typesense', 'composer require typesense/typesense-php'],
+                    ], $missing);
+                    break;
+                case 'minio':
+                case 'rustfs':
+                    $this->requirePackage('league/flysystem-aws-s3-v3', 'Laravel Filesystem to use the selected S3-compatible object store', 'composer require league/flysystem-aws-s3-v3', $missing);
+                    break;
+                case 'rabbitmq':
+                    $this->requirePackage('vladimir-yuldashev/laravel-queue-rabbitmq', 'Laravel to provide the selected RabbitMQ queue driver', 'composer require vladimir-yuldashev/laravel-queue-rabbitmq', $missing);
+                    break;
+                case 'selenium':
+                    $this->requirePackage('laravel/dusk', 'Laravel to drive the selected Selenium browser service', 'composer require --dev laravel/dusk', $missing);
+                    break;
+                case 'soketi':
+                    $this->requirePackage('pusher/pusher-php-server', 'Laravel broadcasting to communicate with the selected Soketi service', 'composer require pusher/pusher-php-server', $missing);
+                    break;
+            }
         }
     }
 

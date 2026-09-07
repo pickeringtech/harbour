@@ -27,7 +27,7 @@ final class FileWorkspaceStateRepository implements WorkspaceStateRepository
         }
 
         try {
-            $contents = file_get_contents($this->path);
+            $contents = @file_get_contents($this->path);
 
             if ($contents === false) {
                 throw new JsonException('State is unreadable.');
@@ -41,10 +41,6 @@ final class FileWorkspaceStateRepository implements WorkspaceStateRepository
 
             return WorkspaceState::fromArray($data);
         } catch (Throwable $exception) {
-            if ($exception instanceof HarbourException) {
-                throw $exception;
-            }
-
             throw new HarbourException(
                 ErrorCode::StateCorrupted,
                 'Harbour state is corrupted; it was not overwritten.',

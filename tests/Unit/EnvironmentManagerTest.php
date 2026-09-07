@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PickeringTech\Harbour\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
+use PickeringTech\Harbour\Environment\EnvironmentFile;
 use PickeringTech\Harbour\Environment\EnvironmentManager;
 use PickeringTech\Harbour\Exceptions\ErrorCode;
 use PickeringTech\Harbour\Exceptions\HarbourException;
@@ -104,6 +105,87 @@ final class EnvironmentManagerTest extends TestCase
             @unlink($this->directory.'/.harbour');
             @rmdir($external);
         }
+    }
+
+    public function test_environment_parsing_preserves_quoted_values_and_ignores_non_assignments(): void
+    {
+        self::assertSame([
+            'DOUBLE' => 'two words',
+            'SINGLE' => 'one word',
+            'PLAIN' => 'value',
+        ], (new EnvironmentFile)->parse("# comment\nexport DOUBLE=\"two words\"\nSINGLE='one word'\nPLAIN=value\n"));
+    }
+
+    public function test_prepare_and_render_fail_closed_for_unreadable_or_unprepared_environments(): void
+    {
+        $manager = new EnvironmentManager($this->directory);
+        $state = WorkspaceState::begin($this->identity(), $this->directory);
+
+        try {
+            $manager->render($state, "GENERATED=true\n");
+            self::fail('Rendering without preserving the environment must fail.');
+        } catch (HarbourException $exception) {
+            self::assertSame(ErrorCode::UnsafeOperation, $exception->errorCode);
+        }
+
+        file_put_contents($this->directory.'/.env', "SECRET=value\n");
+        chmod($this->directory.'/.env', 0000);
+        try {
+            $manager->prepare($state);
+            self::fail('An unreadable environment must not be replaced.');
+        } catch (HarbourException $exception) {
+            self::assertStringContainsString('Unable to read', $exception->getMessage());
+        } finally {
+            chmod($this->directory.'/.env', 0600);
+        }
+    }
+
+    public function test_restore_rejects_a_corrupted_backup_and_reports_an_unremovable_generated_file(): void
+    {
+        file_put_contents($this->directory.'/.env', "ORIGINAL=true\n");
+        $manager = new EnvironmentManager($this->directory);
+        $state = $manager->render(
+            $manager->prepare(WorkspaceState::begin($this->identity(), $this->directory)),
+            "GENERATED=true\n",
+        );
+        file_put_contents($this->directory.'/.harbour/backups/env.original', "TAMPERED=true\n");
+        try {
+            $manager->assertRestorable($state, false);
+            self::fail('A corrupted original backup must fail closed.');
+        } catch (HarbourException $exception) {
+            self::assertSame(ErrorCode::StateCorrupted, $exception->errorCode);
+        }
+
+        $other = $this->directory.'/generated';
+        mkdir($other, 0700);
+        $generated = new EnvironmentManager($other);
+        $generatedState = $generated->render(
+            $generated->prepare(WorkspaceState::begin($this->identity(), $other)),
+            "GENERATED=true\n",
+        );
+        chmod($other, 0500);
+        try {
+            $generated->restore($generatedState, false);
+            self::fail('An environment in a non-writable directory must be retained.');
+        } catch (HarbourException $exception) {
+            self::assertStringContainsString('Unable to remove', $exception->getMessage());
+        } finally {
+            chmod($other, 0700);
+        }
+    }
+
+    public function test_cleanup_removes_empty_backup_directories_and_unsafe_environment_nodes_are_rejected(): void
+    {
+        file_put_contents($this->directory.'/.env', "ORIGINAL=true\n");
+        $manager = new EnvironmentManager($this->directory);
+        $manager->prepare(WorkspaceState::begin($this->identity(), $this->directory));
+        $manager->cleanupBackup();
+        self::assertDirectoryDoesNotExist($this->directory.'/.harbour');
+
+        unlink($this->directory.'/.env');
+        mkdir($this->directory.'/.env');
+        $this->expectException(HarbourException::class);
+        $manager->prepare(WorkspaceState::begin($this->identity(), $this->directory));
     }
 
     private function identity(): WorkspaceIdentity

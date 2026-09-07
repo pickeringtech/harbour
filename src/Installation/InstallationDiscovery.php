@@ -144,10 +144,6 @@ final readonly class InstallationDiscovery
     /** @return list<string> */
     private static function serviceVariables(string $service): array
     {
-        try {
-            return (new InstallationServiceCatalog)->get($service)->environmentKeys;
-        } catch (\LogicException) {
-            return [];
-        }
+        return (new InstallationServiceCatalog)->get($service)->environmentKeys;
     }
 }

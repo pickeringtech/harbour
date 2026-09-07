@@ -6,14 +6,18 @@ namespace PickeringTech\Harbour\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
 use PickeringTech\Harbour\Contracts\CommandRunner;
+use PickeringTech\Harbour\Contracts\WorkspaceStateRepository;
 use PickeringTech\Harbour\Docker\ComposeManager;
 use PickeringTech\Harbour\Docker\DockerManager;
 use PickeringTech\Harbour\Exceptions\ErrorCode;
 use PickeringTech\Harbour\Exceptions\HarbourException;
+use PickeringTech\Harbour\HarbourConfig;
 use PickeringTech\Harbour\Identity\ContextIdentifier;
 use PickeringTech\Harbour\Identity\WorkspaceIdentity;
+use PickeringTech\Harbour\Lifecycle\ManagedInfrastructure;
 use PickeringTech\Harbour\Process\ProcessResult;
 use PickeringTech\Harbour\State\OwnedResource;
+use PickeringTech\Harbour\State\WorkspaceState;
 
 final class ManagedInfrastructureTest extends TestCase
 {
@@ -135,6 +139,89 @@ final class ManagedInfrastructureTest extends TestCase
 
         $invalid = new OwnedResource('compose_'.str_repeat('d', 32), 'ws_test', 'compose_project', 'compose', []);
         $this->assertHarbourCode(ErrorCode::DockerResourceNotOwned, fn () => $manager->start($invalid, $this->directory, []));
+
+        $badId = new OwnedResource('bad-id', $resource->workspaceId, $resource->type, $resource->driver, $resource->metadata);
+        $this->assertHarbourCode(ErrorCode::DockerResourceNotOwned, fn () => $manager->start($badId, $this->directory, []));
+
+        file_put_contents($this->directory.'/unreadable.yml', "services: {}\n");
+        chmod($this->directory.'/unreadable.yml', 0000);
+        try {
+            $this->assertHarbourCode(
+                ErrorCode::UnsafeOperation,
+                fn () => $manager->prepare($this->identity(), $this->directory, 'unreadable', ['file' => 'unreadable.yml']),
+            );
+        } finally {
+            chmod($this->directory.'/unreadable.yml', 0600);
+        }
+    }
+
+    public function test_managed_infrastructure_recovers_pending_containers_and_rejects_missing_confirmed_ones(): void
+    {
+        $identity = $this->identity();
+        $pending = new OwnedResource('docker_'.str_repeat('a', 32), $identity->id(), 'docker_container', 'docker', [
+            'service' => 'search',
+            'container_name' => 'harbour-search',
+            'creation_pending' => true,
+        ]);
+        $labels = json_encode([
+            DockerManager::MANAGED_LABEL => 'true',
+            DockerManager::WORKSPACE_LABEL => $identity->id(),
+            DockerManager::RESOURCE_LABEL => $pending->id,
+        ], JSON_THROW_ON_ERROR);
+        $runner = new ScenarioCommandRunner([
+            new ProcessResult(0, 'exists'),
+            new ProcessResult(0, $labels),
+            new ProcessResult(0, $labels),
+            new ProcessResult(0, 'started'),
+        ]);
+        $states = new RecordingWorkspaceStateRepository;
+        $infrastructure = new ManagedInfrastructure(
+            $this->directory,
+            $this->harbourConfig(),
+            $states,
+            new DockerManager($runner, new ContextIdentifier),
+            new ComposeManager($runner, new ContextIdentifier),
+        );
+
+        $recovered = $infrastructure->setupDocker(WorkspaceState::begin($identity, $this->directory)->withResource($pending));
+
+        self::assertFalse($recovered->resources[0]->creationPending());
+        self::assertCount(1, $states->saved);
+
+        $missingRunner = new ScenarioCommandRunner([new ProcessResult(1, '')]);
+        $missing = new ManagedInfrastructure(
+            $this->directory,
+            $this->harbourConfig(),
+            new RecordingWorkspaceStateRepository,
+            new DockerManager($missingRunner, new ContextIdentifier),
+            new ComposeManager($missingRunner, new ContextIdentifier),
+        );
+        $this->assertHarbourCode(
+            ErrorCode::DockerResourceNotOwned,
+            fn () => $missing->setupDocker(WorkspaceState::begin($identity, $this->directory)->withResource($pending->created())),
+        );
+    }
+
+    private function harbourConfig(): HarbourConfig
+    {
+        return new HarbourConfig(
+            true,
+            '.env.harbour',
+            '.harbour.json',
+            null,
+            'shared',
+            [],
+            false,
+            null,
+            'database/harbour.sqlite',
+            false,
+            false,
+            [],
+            [],
+            ['search' => ['driver' => 'docker', 'image' => 'search:latest']],
+            [],
+            [],
+        );
     }
 
     /** @param callable(): mixed $operation */
@@ -171,6 +258,24 @@ final class ManagedInfrastructureTest extends TestCase
         }
         @rmdir($path);
     }
+}
+
+final class RecordingWorkspaceStateRepository implements WorkspaceStateRepository
+{
+    /** @var list<WorkspaceState> */
+    public array $saved = [];
+
+    public function load(): ?WorkspaceState
+    {
+        return null;
+    }
+
+    public function save(WorkspaceState $state): void
+    {
+        $this->saved[] = $state;
+    }
+
+    public function delete(): void {}
 }
 
 final class ScenarioCommandRunner implements CommandRunner

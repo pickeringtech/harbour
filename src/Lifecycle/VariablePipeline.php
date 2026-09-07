@@ -111,7 +111,7 @@ final class VariablePipeline
             || ($resolved !== $root && ! str_starts_with($resolved, $root.DIRECTORY_SEPARATOR))) {
             throw new HarbourException(ErrorCode::InvalidConfiguration, "Harbour environment template [{$path}] is missing or unsafe.");
         }
-        $contents = file_get_contents($resolved);
+        $contents = @file_get_contents($resolved);
 
         if ($contents === false) {
             throw new HarbourException(ErrorCode::InvalidConfiguration, "Unable to read Harbour environment template [{$path}].");

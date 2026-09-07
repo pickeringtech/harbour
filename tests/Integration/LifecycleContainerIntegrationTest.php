@@ -121,6 +121,33 @@ final class LifecycleContainerIntegrationTest extends TestCase
         self::assertSame("CHANGED=true\n", $pipeline->templateContents());
     }
 
+    public function test_disabled_harbour_and_unreadable_templates_fail_before_workspace_mutation(): void
+    {
+        $config = $this->application()->make(Repository::class);
+        $config->set('harbour.enabled', false);
+        $this->application()->forgetInstance(HarbourConfig::class);
+        $this->application()->forgetInstance(WorkspaceManager::class);
+        try {
+            $this->application()->make(WorkspaceManager::class)->setup();
+            self::fail('A disabled Harbour installation must reject setup.');
+        } catch (HarbourException $exception) {
+            self::assertSame(ErrorCode::UnsafeOperation, $exception->errorCode);
+        }
+
+        $config->set('harbour.enabled', true);
+        chmod($this->workspaceDirectory.'/.env.harbour', 0000);
+        $this->application()->forgetInstance(HarbourConfig::class);
+        $this->application()->forgetInstance(VariablePipeline::class);
+        try {
+            $this->application()->make(VariablePipeline::class)->templateContents();
+            self::fail('An unreadable template must fail closed.');
+        } catch (HarbourException $exception) {
+            self::assertSame(ErrorCode::InvalidConfiguration, $exception->errorCode);
+        } finally {
+            chmod($this->workspaceDirectory.'/.env.harbour', 0600);
+        }
+    }
+
     public function test_vite_uses_its_workspace_local_default_and_honours_an_explicit_hot_file(): void
     {
         $vite = $this->application()->make(Vite::class);

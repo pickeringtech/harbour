@@ -155,10 +155,6 @@ final class FilePortRegistry
         $handle = @fopen($this->lockPath, 'c+');
 
         if ($handle === false || ! flock($handle, LOCK_EX)) {
-            if (is_resource($handle)) {
-                fclose($handle);
-            }
-
             throw new HarbourException(ErrorCode::PortAllocationFailed, 'Unable to acquire the port registry lock.');
         }
 

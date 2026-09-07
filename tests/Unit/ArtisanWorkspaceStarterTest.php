@@ -193,6 +193,9 @@ final class ArtisanWorkspaceStarterTest extends TestCase
         $runner = new RecordingStarterRunner(new ProcessResult(0, $output));
         (new ArtisanWorkspaceStarter($this->directory, $runner))->start(static function (string $type, string $buffer): void {});
         self::assertContains('--stream', $runner->command);
+
+        $escaped = json_encode(['ok' => true, 'workspace' => ['message' => 'escaped "quote" and \\ slash']], JSON_THROW_ON_ERROR);
+        self::assertSame('escaped "quote" and \\ slash', ArtisanWorkspaceStarter::workspaceFromOutput($escaped)['message']);
     }
 
     public function test_human_streaming_forwards_service_stderr_but_hides_the_internal_json_protocol(): void

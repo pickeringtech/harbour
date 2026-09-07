@@ -31,9 +31,6 @@ final readonly class ArtisanWorkspaceStarter implements InstalledWorkspaceStarte
 
         $cachedConfiguration = $this->workspacePath.'/bootstrap/cache/config.php';
         WorkspacePath::assertSafe($this->workspacePath, $cachedConfiguration);
-        if (is_link($cachedConfiguration)) {
-            throw new HarbourException(ErrorCode::UnsafeOperation, 'Refusing to clear a symlinked Laravel configuration cache.');
-        }
         if (is_file($cachedConfiguration)) {
             $clear = $this->processes->run([PHP_BINARY, $artisan, 'config:clear'], $this->workspacePath);
             if (! $clear->successful()) {

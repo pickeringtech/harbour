@@ -1,13 +1,28 @@
 # Testing Harbour
 
-The fast suite is `composer test`. Safety-sensitive release validation also
-requires PDO-backed database services, Redis, Docker, and Compose.
+The fast, ungated suite is `composer test:quick`. Safety-sensitive release
+validation also requires PDO-backed database services, Redis, Docker, and
+Compose.
 
-`composer coverage` generates `build/coverage.xml` and fails unless line
-coverage across `src/` is at least 95%. CI runs this command with every real
-integration service enabled, so skipped database, Redis, Docker, or Compose
-tests cannot make the percentage look healthier than the release suite really
-is.
+`composer test` is the canonical local and CI coverage gate. It requires PCOV,
+or Xdebug with coverage mode enabled, runs the full PHPUnit suite, generates
+`build/coverage.xml`, and fails unless executable statement coverage across
+`src/` is exactly 100%. A missing coverage driver or missing/malformed report is
+an actionable hard failure. `composer coverage` is an alias for the same gate.
+CI runs it with every real integration service enabled, so skipped database,
+Redis, Docker, or Compose tests cannot make the percentage look healthier than
+the release suite really is.
+
+For the same gate locally against the real integration services:
+
+```bash
+HARBOUR_DATABASE_INTEGRATION=1 \
+HARBOUR_REDIS_INTEGRATION=1 \
+HARBOUR_DOCKER_INTEGRATION=1 \
+POSTGRES_PASSWORD=harbour \
+MYSQL_PASSWORD=harbour \
+composer test
+```
 
 The release acceptance scenario is automated by `composer acceptance`. It
 creates a real Laravel 13 project and two real Git worktrees, installs and runs

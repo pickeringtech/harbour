@@ -51,9 +51,27 @@ final class StateAndSupportTest extends TestCase
         file_put_contents($path, '{not json');
         $this->assertHarbourCode(ErrorCode::StateCorrupted, static fn () => $repository->load());
 
+        file_put_contents($path, 'true');
+        $this->assertHarbourCode(ErrorCode::StateCorrupted, static fn () => $repository->load());
+
+        chmod($path, 0000);
+        $this->assertHarbourCode(ErrorCode::StateCorrupted, static fn () => $repository->load());
+        chmod($path, 0600);
+
         unlink($path);
         mkdir($path);
         $this->assertHarbourCode(ErrorCode::UnsafeOperation, static fn () => $repository->load());
+
+        $deleteDirectory = $this->directory.'/delete-state';
+        mkdir($deleteDirectory);
+        $deletePath = $deleteDirectory.'/.harbour.json';
+        file_put_contents($deletePath, '{}');
+        chmod($deleteDirectory, 0500);
+        try {
+            $this->assertHarbourCode(ErrorCode::StateWriteFailed, static fn () => (new FileWorkspaceStateRepository($deletePath))->delete());
+        } finally {
+            chmod($deleteDirectory, 0700);
+        }
     }
 
     public function test_state_repository_refuses_to_encode_unserializable_metadata(): void
@@ -159,6 +177,24 @@ final class StateAndSupportTest extends TestCase
 
         mkdir($this->directory.'/target-directory');
         $this->assertHarbourCode(ErrorCode::StateWriteFailed, fn () => $atomic->write($this->directory.'/target-directory', 'cannot replace directory'));
+
+        file_put_contents($this->directory.'/blocked', 'not a directory');
+        $this->assertHarbourCode(ErrorCode::StateWriteFailed, fn () => $atomic->write($this->directory.'/blocked/value', 'value'));
+
+        mkdir($this->directory.'/readonly');
+        chmod($this->directory.'/readonly', 0500);
+        try {
+            $this->assertHarbourCode(ErrorCode::StateWriteFailed, fn () => $atomic->write($this->directory.'/readonly/value', 'value'));
+        } finally {
+            chmod($this->directory.'/readonly', 0700);
+        }
+
+        stream_wrapper_register('harbour-short-write', ShortWriteStream::class);
+        try {
+            $this->assertHarbourCode(ErrorCode::StateWriteFailed, static fn () => $atomic->write('harbour-short-write://root/value', 'value'));
+        } finally {
+            stream_wrapper_unregister('harbour-short-write');
+        }
     }
 
     public function test_lifecycle_lock_returns_values_and_releases_after_exceptions(): void
@@ -175,6 +211,26 @@ final class StateAndSupportTest extends TestCase
         }
 
         self::assertSame(42, $lock->synchronized(static fn (): int => 42));
+
+        $blockedWorkspace = $this->directory.'/blocked-workspace';
+        mkdir($blockedWorkspace);
+        file_put_contents($blockedWorkspace.'/.harbour', 'blocks lock directory creation');
+        $this->assertHarbourCode(
+            ErrorCode::StateWriteFailed,
+            static fn () => (new LifecycleLock($blockedWorkspace.'/.harbour/locks/lifecycle.lock'))->synchronized(static fn () => null),
+        );
+
+        $readonlyWorkspace = $this->directory.'/readonly-workspace';
+        mkdir($readonlyWorkspace.'/.harbour/locks', 0700, true);
+        chmod($readonlyWorkspace.'/.harbour/locks', 0500);
+        try {
+            $this->assertHarbourCode(
+                ErrorCode::UnsafeOperation,
+                static fn () => (new LifecycleLock($readonlyWorkspace.'/.harbour/locks/lifecycle.lock'))->synchronized(static fn () => null),
+            );
+        } finally {
+            chmod($readonlyWorkspace.'/.harbour/locks', 0700);
+        }
     }
 
     public function test_port_requirements_and_registry_failure_reconciliation_are_guarded(): void
@@ -261,5 +317,27 @@ final class StateAndSupportTest extends TestCase
             is_dir($child) && ! is_link($child) ? $this->removeDirectory($child) : @unlink($child);
         }
         @rmdir($path);
+    }
+}
+
+final class ShortWriteStream
+{
+    /** @var resource|null */
+    public $context;
+
+    public function stream_open(string $path, string $mode, int $options, ?string &$openedPath): bool
+    {
+        return true;
+    }
+
+    public function stream_write(string $data): int
+    {
+        return 0;
+    }
+
+    /** @return array{mode: int} */
+    public function url_stat(string $path, int $flags): array
+    {
+        return ['mode' => 0040700];
     }
 }

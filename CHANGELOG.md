@@ -25,6 +25,9 @@ All notable changes will be documented here. The format follows
 
 ### Changed
 
+- PHPUnit now enforces 100% executable-statement coverage through the same
+  `composer test` gate locally and in CI, with explicit failures for missing
+  coverage drivers and invalid reports.
 - The README now opens with a direct five-minute path from installation through
   service selection, application launch, later worktrees, and safe teardown.
 

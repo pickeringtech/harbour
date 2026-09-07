@@ -52,6 +52,15 @@ final class ArtisanApplicationLauncherTest extends TestCase
             self::assertSame('vite failed', $exception->context['stderr']);
         }
     }
+
+    public function test_it_rejects_a_missing_artisan_entry_point(): void
+    {
+        unlink($this->directory.'/artisan');
+
+        $this->expectException(HarbourException::class);
+        $this->expectExceptionMessage('Artisan entry point');
+        (new ArtisanApplicationLauncher($this->directory, new RecordingApplicationRunner))->launch();
+    }
 }
 
 final class RecordingApplicationRunner implements CommandRunner

@@ -30,10 +30,6 @@ final readonly class LifecycleLock
         $handle = @fopen($this->path, 'c+');
 
         if ($handle === false || ! flock($handle, LOCK_EX)) {
-            if (is_resource($handle)) {
-                fclose($handle);
-            }
-
             throw new HarbourException(ErrorCode::UnsafeOperation, 'Unable to acquire the workspace lifecycle lock.');
         }
 

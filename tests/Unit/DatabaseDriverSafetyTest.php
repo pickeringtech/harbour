@@ -4,16 +4,20 @@ declare(strict_types=1);
 
 namespace PickeringTech\Harbour\Tests\Unit;
 
+use PDO;
 use PHPUnit\Framework\TestCase;
 use PickeringTech\Harbour\Database\DatabaseConfiguration;
 use PickeringTech\Harbour\Database\DatabaseManager;
 use PickeringTech\Harbour\Database\MySqlDatabaseDriver;
+use PickeringTech\Harbour\Database\OwnedDatabaseEvidence;
+use PickeringTech\Harbour\Database\OwnershipMarker;
 use PickeringTech\Harbour\Database\PostgreSqlDatabaseDriver;
 use PickeringTech\Harbour\Database\SqliteDatabaseDriver;
 use PickeringTech\Harbour\Exceptions\ErrorCode;
 use PickeringTech\Harbour\Exceptions\HarbourException;
 use PickeringTech\Harbour\Identity\WorkspaceIdentity;
 use PickeringTech\Harbour\State\OwnedResource;
+use RuntimeException;
 
 final class DatabaseDriverSafetyTest extends TestCase
 {
@@ -57,6 +61,7 @@ final class DatabaseDriverSafetyTest extends TestCase
         $unsafeCharset = new DatabaseConfiguration('mysql', '127.0.0.1', 3306, username: 'root', charset: 'utf8;drop');
         $this->assertHarbourCode(ErrorCode::UnsafeOperation, fn () => $driver->create($this->resource('mysql', 'harbour_test', $unsafeCharset->fingerprint()), $this->directory, $unsafeCharset));
         $this->assertHarbourCode(ErrorCode::DatabaseCreationFailed, fn () => $driver->create($resource, $this->directory, $configuration));
+        self::assertFalse($driver->exists($resource, new DatabaseConfiguration('mysql')));
 
         $socketConfiguration = new DatabaseConfiguration('mysql', unixSocket: $this->directory.'/missing.sock', username: 'root');
         $this->assertHarbourCode(
@@ -75,6 +80,7 @@ final class DatabaseDriverSafetyTest extends TestCase
         $this->assertHarbourCode(ErrorCode::DatabaseNotOwned, fn () => $driver->destroy($resource, new DatabaseConfiguration('pgsql'), $this->directory));
         $this->assertHarbourCode(ErrorCode::UnsafeOperation, fn () => $driver->create($this->resource('pgsql', 'bad-name', $configuration->fingerprint()), $this->directory, $configuration));
         $this->assertHarbourCode(ErrorCode::DatabaseCreationFailed, fn () => $driver->create($resource, $this->directory, $configuration));
+        self::assertFalse($driver->exists($resource, new DatabaseConfiguration('pgsql')));
     }
 
     public function test_sqlite_rejects_mismatched_evidence_corruption_and_traversal(): void
@@ -171,6 +177,89 @@ final class DatabaseDriverSafetyTest extends TestCase
         $driver->destroy($original, $configuration, $this->directory);
     }
 
+    public function test_sqlite_reports_directory_marker_inspection_and_delete_failures(): void
+    {
+        if (! extension_loaded('pdo_sqlite')) {
+            self::markTestSkipped('The pdo_sqlite extension is required.');
+        }
+
+        $blockedPath = $this->directory.'/blocked/database.sqlite';
+        file_put_contents($this->directory.'/blocked', 'not a directory');
+        $blockedConfiguration = new DatabaseConfiguration('sqlite', database: $blockedPath);
+        $this->assertHarbourCode(
+            ErrorCode::DatabaseCreationFailed,
+            fn () => (new SqliteDatabaseDriver)->create(
+                $this->resource('sqlite', $blockedPath, $blockedConfiguration->fingerprint()),
+                $this->directory,
+                $blockedConfiguration,
+            ),
+        );
+        unlink($this->directory.'/blocked');
+
+        $path = $this->directory.'/database.sqlite';
+        $configuration = new DatabaseConfiguration('sqlite', database: $path);
+        $resource = $this->resource('sqlite', $path, $configuration->fingerprint());
+        $driver = new SqliteDatabaseDriver;
+        $driver->create($resource, $this->directory, $configuration);
+
+        $throwing = new SqliteDatabaseDriver(new ThrowingOwnershipMarker);
+        self::assertFalse($throwing->exists($resource, $configuration));
+        $this->assertHarbourCode(
+            ErrorCode::DatabaseCreationFailed,
+            fn () => $throwing->create($resource, $this->directory, $configuration),
+        );
+
+        chmod($this->directory, 0500);
+        try {
+            $driver->destroy($resource, $configuration, $this->directory);
+            self::fail('An undeletable SQLite database must be reported.');
+        } catch (HarbourException $exception) {
+            self::assertSame(ErrorCode::UnsafeOperation, $exception->errorCode);
+        } finally {
+            chmod($this->directory, 0700);
+        }
+        $driver->destroy($resource, $configuration, $this->directory);
+    }
+
+    public function test_sqlite_removes_a_partial_database_after_marker_creation_fails(): void
+    {
+        if (! extension_loaded('pdo_sqlite')) {
+            self::markTestSkipped('The pdo_sqlite extension is required.');
+        }
+        $path = $this->directory.'/failed.sqlite';
+        $configuration = new DatabaseConfiguration('sqlite', database: $path);
+        $resource = $this->resource('sqlite', $path, $configuration->fingerprint());
+
+        $this->assertHarbourCode(
+            ErrorCode::DatabaseCreationFailed,
+            fn () => (new SqliteDatabaseDriver(new FailingSqliteOwnershipMarker))->create($resource, $this->directory, $configuration),
+        );
+        self::assertFileDoesNotExist($path);
+    }
+
+    public function test_ownership_marker_fails_closed_when_transaction_recovery_itself_fails(): void
+    {
+        $pdo = new class extends PDO
+        {
+            public function __construct() {}
+
+            public function beginTransaction(): bool
+            {
+                throw new RuntimeException('transaction failed');
+            }
+
+            public function inTransaction(): bool
+            {
+                throw new RuntimeException('recovery failed');
+            }
+        };
+        $evidence = OwnedDatabaseEvidence::fromResource(
+            $this->resource('sqlite', 'database.sqlite', (new DatabaseConfiguration('sqlite'))->fingerprint()),
+        );
+
+        self::assertFalse((new OwnershipMarker)->reassignIfOwnedByWorkspace($pdo, $evidence));
+    }
+
     /** @param callable(): mixed $operation */
     private function assertHarbourCode(ErrorCode $code, callable $operation): void
     {
@@ -214,5 +303,21 @@ final class DatabaseDriverSafetyTest extends TestCase
         fclose($socket);
 
         return $port;
+    }
+}
+
+final class ThrowingOwnershipMarker extends OwnershipMarker
+{
+    public function matches(PDO $pdo, OwnedDatabaseEvidence $evidence): bool
+    {
+        throw new RuntimeException('marker inspection failed');
+    }
+}
+
+final class FailingSqliteOwnershipMarker extends OwnershipMarker
+{
+    public function create(PDO $pdo, string $workspaceId, string $resourceId, string $token): void
+    {
+        throw new RuntimeException('marker creation failed');
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PickeringTech\Harbour\Tests\Unit;
 
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use PickeringTech\Harbour\Identity\ContextIdentifier;
@@ -33,6 +34,22 @@ final class WorkspaceIdentityTest extends TestCase
         self::assertSame('project_feature_login_a1b2c3d4_e39daee0', $identifiers->cookie($identity, 'Project'));
         self::assertSame('project_feature_login_a1b2c3d4_e39daee0:', $identifiers->redis($identity, 'Project'));
         self::assertSame('tmp-feature-login-a1b2c3d4-f147f3c3', $identifiers->filesystem($identity, 'tmp'));
+    }
+
+    public function test_identity_rejects_empty_names_and_invalid_hashes(): void
+    {
+        foreach ([
+            ['', 'slug', str_repeat('a', 64)],
+            ['id', '', str_repeat('a', 64)],
+            ['id', 'slug', 'not-a-hash'],
+        ] as [$id, $slug, $hash]) {
+            try {
+                new WorkspaceIdentity($id, $slug, $hash, null);
+                self::fail('Invalid identity input must be rejected.');
+            } catch (InvalidArgumentException) {
+                self::addToAssertionCount(1);
+            }
+        }
     }
 
     #[DataProvider('hostileNames')]

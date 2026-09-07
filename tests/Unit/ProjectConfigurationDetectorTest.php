@@ -382,6 +382,17 @@ final class ProjectConfigurationDetectorTest extends TestCase
         self::assertSame(1025, $discovery->port('mailpit', 1));
     }
 
+    public function test_invalid_redis_client_and_implicit_mailpit_are_normalized(): void
+    {
+        file_put_contents($this->workspace.'/herd.yml', "services:\n  mailpit:\n    version: latest\n");
+        file_put_contents($this->workspace.'/.env', "REDIS_CLIENT=unknown\nMAIL_MAILER=sendmail\n");
+
+        $discovery = $this->detector()->discover();
+
+        self::assertSame('auto', $discovery->selection->redisClient);
+        self::assertSame('mailpit', $discovery->selection->mail);
+    }
+
     public function test_symlinked_configuration_files_are_rejected(): void
     {
         $outside = sys_get_temp_dir().'/harbour-discovery-outside-'.bin2hex(random_bytes(6));

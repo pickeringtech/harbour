@@ -13,7 +13,7 @@
 ## Quality gates
 
 - [ ] PHPUnit
-- [ ] Line coverage remains at least 95%
+- [ ] Executable statement coverage remains at 100%
 - [ ] PHPStan/Larastan max
 - [ ] Pint
 - [ ] Relevant database/Redis/Docker/Compose tests

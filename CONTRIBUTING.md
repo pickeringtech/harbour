@@ -21,10 +21,9 @@ npm run docs:build
 git clone git@github.com:pickeringtech/harbour.git
 cd harbour
 composer install
-composer test
+composer test:quick
 composer fuzz
 composer acceptance
-composer coverage
 composer mutate
 composer analyse
 composer security:analyse
@@ -35,6 +34,12 @@ PHP 8.4 is the minimum supported runtime. Integration tests use the environment
 variables documented in the GitHub Actions workflow. Docker tests are opt-in so
 ordinary unit runs never mutate the local Docker daemon.
 
+The required coverage gate is `composer test` (with the relevant integration
+flags and services enabled). It requires PCOV, or Xdebug with coverage mode,
+runs PHPUnit, writes `build/coverage.xml`, and fails unless every executable
+statement in `src/` is covered. `composer coverage` is an alias for the same
+gate. Use `composer test:quick` only for a fast, ungated development run.
+
 ## Pull requests
 
 - Add a failing behavioral test before or with the implementation.
@@ -42,7 +47,7 @@ ordinary unit runs never mutate the local Docker daemon.
 - Add an ADR for a lasting safety or architectural decision.
 - Never weaken an ownership guard to make `--force` convenient.
 - Update README/config examples and `CHANGELOG.md`.
-- Run PHPUnit, the 95% coverage gate, mutation testing, PHPStan/Larastan max,
+- Run PHPUnit, the 100% coverage gate, mutation testing, PHPStan/Larastan max,
   Psalm taint analysis, Pint, and relevant integration tests.
 
 Keep commits focused. A maintainer may ask for a security review or mutation

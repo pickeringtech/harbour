@@ -43,12 +43,8 @@ class OwnershipMarker
                 return false;
             }
 
+            /** @var array<string, mixed> $row */
             $row = $rows[0];
-            if (! is_array($row)) {
-                $this->rollback($pdo);
-
-                return false;
-            }
             $workspaceId = $row['workspace_id'] ?? null;
             $resourceId = $row['resource_id'] ?? null;
             $token = $row['ownership_token'] ?? null;

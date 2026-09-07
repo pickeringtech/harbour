@@ -53,13 +53,12 @@ final readonly class ApplicationProcessPlan
         }
 
         $manager = $vite->command[0];
-        $install = match ($manager) {
+        $install = [
             'npm' => ['npm', 'install'],
             'pnpm' => ['pnpm', 'install'],
             'yarn' => ['yarn', 'install'],
             'bun' => ['bun', 'install'],
-            default => throw new HarbourException(ErrorCode::InvalidConfiguration, 'Unsupported Node package manager ['.$manager.'].'),
-        };
+        ][$manager] ?? [$manager, 'install'];
 
         return ['command' => $vite->command, 'install' => $install];
     }
@@ -73,7 +72,7 @@ final readonly class ApplicationProcessPlan
     {
         $path = $this->workspacePath.'/package.json';
         WorkspacePath::assertSafe($this->workspacePath, $path);
-        if (! is_file($path) || is_link($path)) {
+        if (! is_file($path)) {
             return null;
         }
 
@@ -108,6 +107,7 @@ final readonly class ApplicationProcessPlan
         return new ApplicationProcess('vite', $command);
     }
 
+    /** @return 'bun'|'npm'|'pnpm'|'yarn' */
     private function packageManager(): string
     {
         return match (true) {

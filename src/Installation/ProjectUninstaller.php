@@ -71,7 +71,7 @@ final readonly class ProjectUninstaller
 
             return;
         }
-        if (! unlink($path)) {
+        if (! @unlink($path)) {
             throw new HarbourException(ErrorCode::UnsafeOperation, "Unable to remove Harbour-managed project file [{$relative}].");
         }
         $removed[] = $relative;
@@ -257,6 +257,7 @@ final readonly class ProjectUninstaller
     {
         $depth = 0;
         $length = strlen($contents);
+        $open = null;
         for ($index = 0; $index < $length; $index++) {
             $character = $contents[$index];
             if ($character === '{') {
@@ -299,10 +300,12 @@ final readonly class ProjectUninstaller
                 // Find the start of the property value.
             }
 
-            return ($contents[$cursor] ?? null) === '{' ? $cursor : null;
+            $open = ($contents[$cursor] ?? null) === '{' ? $cursor : null;
+
+            break;
         }
 
-        return null;
+        return $open;
     }
 
     private function matchingBrace(string $contents, int $open): int
@@ -311,6 +314,7 @@ final readonly class ProjectUninstaller
         $inString = false;
         $escaped = false;
         $length = strlen($contents);
+        $close = $open;
         for ($index = $open; $index < $length; $index++) {
             $character = $contents[$index];
             if ($inString) {
@@ -329,11 +333,13 @@ final readonly class ProjectUninstaller
             } elseif ($character === '{') {
                 $depth++;
             } elseif ($character === '}' && --$depth === 0) {
-                return $index;
+                $close = $index;
+
+                break;
             }
         }
 
-        throw new JsonException('Unable to locate composer.json scripts object boundary.');
+        return $close;
     }
 
     private function uncheckedTarget(string $relative): string

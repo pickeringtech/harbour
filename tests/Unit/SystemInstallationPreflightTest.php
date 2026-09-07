@@ -71,6 +71,21 @@ final class SystemInstallationPreflightTest extends TestCase
         self::addToAssertionCount(1);
     }
 
+    public function test_it_accepts_an_explicit_phpredis_client(): void
+    {
+        $preflight = new SystemInstallationPreflight(
+            $this->application()['config'],
+            new PreflightCommandRunner,
+            $this->workspaceDirectory,
+            ['redis'],
+            [],
+        );
+
+        $preflight->assertReady(new InstallationSelection('none', 'redis', 'log', [], 'shared', 'phpredis'));
+
+        self::addToAssertionCount(1);
+    }
+
     public function test_it_requires_compose_v2_after_finding_docker(): void
     {
         $preflight = new SystemInstallationPreflight(
@@ -129,6 +144,25 @@ final class SystemInstallationPreflightTest extends TestCase
 
         $preflight->assertReady(new InstallationSelection('none', 'file', 'log', ['meilisearch']));
         self::addToAssertionCount(1);
+    }
+
+    public function test_malformed_installed_package_sets_fall_back_to_composer_runtime_evidence(): void
+    {
+        mkdir($this->workspaceDirectory.'/vendor/composer', 0700, true);
+        file_put_contents($this->workspaceDirectory.'/vendor/composer/installed.json', '{"packages":"invalid"}');
+        $preflight = new SystemInstallationPreflight(
+            $this->application()['config'],
+            new PreflightCommandRunner,
+            $this->workspaceDirectory,
+            [],
+        );
+
+        try {
+            $preflight->assertReady(new InstallationSelection('none', 'file', 'log', ['minio']));
+            self::fail('The missing Flysystem S3 package must be reported.');
+        } catch (HarbourException $exception) {
+            self::assertContains('package:league/flysystem-aws-s3-v3', $this->missingIds($exception));
+        }
     }
 
     /**

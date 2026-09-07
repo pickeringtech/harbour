@@ -33,7 +33,7 @@ final readonly class ComposeManager
         $path = $this->safeFile($workspacePath, $file);
         $project = $this->identifiers->compose($workspace, $name);
         $resourceId = 'compose_'.bin2hex(random_bytes(16));
-        $contents = file_get_contents($path);
+        $contents = @file_get_contents($path);
         if ($contents === false) {
             throw new HarbourException(ErrorCode::UnsafeOperation, "Unable to snapshot Compose file [{$path}].");
         }

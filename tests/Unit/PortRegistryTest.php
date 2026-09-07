@@ -98,4 +98,28 @@ final class PortRegistryTest extends TestCase
             self::assertSame(ErrorCode::StateCorrupted, $exception->errorCode);
         }
     }
+
+    public function test_registry_directory_and_lock_failures_are_reported_without_mutation(): void
+    {
+        $blocked = $this->directory.'/blocked';
+        file_put_contents($blocked, 'not a directory');
+        try {
+            (new FilePortRegistry($blocked.'/registry'))->releaseWorkspace('ws-a');
+            self::fail('A blocked registry directory must fail.');
+        } catch (HarbourException $exception) {
+            self::assertSame(ErrorCode::StateWriteFailed, $exception->errorCode);
+        }
+
+        $readonly = $this->directory.'/readonly';
+        mkdir($readonly);
+        chmod($readonly, 0500);
+        try {
+            (new FilePortRegistry($readonly))->releaseWorkspace('ws-a');
+            self::fail('An unwritable registry lock must fail.');
+        } catch (HarbourException $exception) {
+            self::assertSame(ErrorCode::PortAllocationFailed, $exception->errorCode);
+        } finally {
+            chmod($readonly, 0700);
+        }
+    }
 }
