@@ -6,7 +6,10 @@ namespace PickeringTech\Harbour\Installation;
 
 final readonly class PhpExtensionGuide
 {
-    public function __construct(private string $osRelease = '/etc/os-release') {}
+    public function __construct(
+        private string $osRelease = '/etc/os-release',
+        private ?string $osFamily = null,
+    ) {}
 
     public function resolution(string $extension): string
     {
@@ -17,16 +20,20 @@ final readonly class PhpExtensionGuide
             return 'Install and enable '.$extension.' for the PHP CLI at '.PHP_BINARY;
         }
 
-        $command = match ($id) {
-            'arch', 'manjaro' => 'sudo pacman -S --needed '.$package,
-            'debian', 'ubuntu', 'linuxmint', 'pop' => 'sudo apt-get install '.$package,
-            'fedora', 'rhel', 'centos', 'rocky', 'almalinux' => 'sudo dnf install '.$package,
-            'alpine' => 'sudo apk add '.$package,
-            default => null,
-        };
-        if ($command === null) {
-            return 'Install package '.$package.' and enable '.$extension.' for the PHP CLI at '.PHP_BINARY;
-        }
+        $command = ([
+            'arch' => 'sudo pacman -S --needed ',
+            'manjaro' => 'sudo pacman -S --needed ',
+            'debian' => 'sudo apt-get install ',
+            'ubuntu' => 'sudo apt-get install ',
+            'linuxmint' => 'sudo apt-get install ',
+            'pop' => 'sudo apt-get install ',
+            'fedora' => 'sudo dnf install ',
+            'rhel' => 'sudo dnf install ',
+            'centos' => 'sudo dnf install ',
+            'rocky' => 'sudo dnf install ',
+            'almalinux' => 'sudo dnf install ',
+            'alpine' => 'sudo apk add ',
+        ][$id] ?? '').$package;
 
         $enable = '';
         if (in_array($id, ['arch', 'manjaro'], true)) {
@@ -46,11 +53,12 @@ final readonly class PhpExtensionGuide
 
     private function linuxFamily(): string
     {
-        if (PHP_OS_FAMILY !== 'Linux' || ! is_file($this->osRelease) || is_link($this->osRelease)) {
-            return strtolower(PHP_OS_FAMILY);
+        $family = $this->osFamily ?? PHP_OS_FAMILY;
+        if ($family !== 'Linux' || ! is_file($this->osRelease) || is_link($this->osRelease)) {
+            return strtolower($family);
         }
 
-        $contents = file_get_contents($this->osRelease);
+        $contents = @file_get_contents($this->osRelease);
         if (! is_string($contents)) {
             return 'linux';
         }

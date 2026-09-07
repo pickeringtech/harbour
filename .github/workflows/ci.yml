@@ -95,7 +95,7 @@ jobs:
       - run: composer validate --strict
       - run: composer format:check
       - run: composer analyse
-      - run: composer test
+      - run: composer test:quick
 
   fuzz:
     name: Property / fuzz testing
@@ -215,8 +215,9 @@ jobs:
           extensions: mbstring, pdo_sqlite, pdo_pgsql, pdo_mysql
           coverage: pcov
       - uses: ramsey/composer-install@65e4f84970763564f46a70b8a54b90d033b3bdda # 4.0.0
-      - run: composer coverage
+      - run: composer test
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
         with:
           name: coverage
           path: build/coverage.xml

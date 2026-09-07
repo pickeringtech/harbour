@@ -25,7 +25,7 @@ final class AtomicFile
         }
 
         try {
-            if (fwrite($handle, $contents) !== strlen($contents)) {
+            if (@fwrite($handle, $contents) !== strlen($contents)) {
                 throw new HarbourException(ErrorCode::StateWriteFailed, "Unable to write [{$path}].");
             }
 

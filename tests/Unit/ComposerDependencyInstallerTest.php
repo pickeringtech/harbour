@@ -30,6 +30,10 @@ final class ComposerDependencyInstallerTest extends TestCase
             ['composer', 'require', 'laravel/scout', '--no-interaction'],
             ['composer', 'require', '--dev', 'laravel/dusk', '--no-interaction'],
         ], $runner->commands);
+
+        $empty = new RecordingDependencyRunner;
+        (new ComposerDependencyInstaller('/tmp/project', $empty))->install([]);
+        self::assertSame([], $empty->commands);
     }
 
     public function test_it_reports_composer_failure_with_a_stable_error(): void

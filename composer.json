@@ -47,6 +47,9 @@
         }
     },
     "extra": {
+        "harbour": {
+            "coverage-minimum": 100
+        },
         "laravel": {
             "providers": [
                 "PickeringTech\\Harbour\\HarbourServiceProvider"
@@ -63,16 +66,18 @@
         "sort-packages": true
     },
     "scripts": {
-        "test": "phpunit",
+        "test": [
+            "@php tools/check-coverage-driver.php",
+            "phpunit --coverage-clover build/coverage.xml --coverage-text",
+            "@php tools/check-coverage.php build/coverage.xml"
+        ],
+        "test:quick": "phpunit",
         "test:unit": "phpunit --testsuite=Unit",
         "test:integration": "phpunit --testsuite=Integration",
         "fuzz": "phpunit tests/Unit/IdentifierPropertyTest.php tests/Unit/InstallationDiscoveryPropertyTest.php tests/Unit/WorktrunkConfigurationPropertyTest.php",
         "acceptance": "bash tools/acceptance-test.sh",
         "acceptance:worktrunk": "bash tools/worktrunk-acceptance-test.sh",
-        "coverage": [
-            "phpunit --coverage-clover build/coverage.xml --coverage-text",
-            "@php tools/check-coverage.php build/coverage.xml 95"
-        ],
+        "coverage": "@test",
         "analyse": "phpstan analyse --memory-limit=1G",
         "security:analyse": "psalm --taint-analysis --no-progress --memory-limit=2G --threads=1 --scan-threads=1",
         "format": "pint",

@@ -35,13 +35,24 @@ final class WorkspaceLifecycleTest extends TestCase
         $config = $this->application()->make(Repository::class);
         match ($case) {
             'ports-not-array' => $config->set('harbour.ports.allocations', 'invalid'),
+            'port-name' => $config->set('harbour.ports.allocations', [123 => ['range' => [8000, 8001]]]),
             'port-definition' => $config->set('harbour.ports.allocations', ['APP_PORT' => []]),
             'port-bounds' => $config->set('harbour.ports.allocations', ['APP_PORT' => ['range' => ['low', 9000]]]),
+            'project-name' => $config->set('harbour.project_name', []),
+            'provider' => $config->set('harbour.installation.provider', 'external'),
+            'connection' => $config->set('harbour.database.connection', []),
+            'sqlite-path' => $config->set('harbour.database.sqlite_path', []),
             'variable-value' => $config->set('harbour.variables', ['BAD' => ['value' => []]]),
+            'variable-name' => $config->set('harbour.variables', ['NOT-VALID' => 'value']),
             'resolver-contract' => $config->set('harbour.resolvers', [stdClass::class]),
             'hook-argument' => $config->set('harbour.hooks.before_setup', [[PHP_BINARY, 123]]),
             'hook-shape' => $config->set('harbour.hooks.before_setup', [['command' => PHP_BINARY]]),
+            'hook-stage' => $config->set('harbour.hooks', [123 => []]),
+            'hook-commands' => $config->set('harbour.hooks', ['before_setup' => 'invalid']),
             'services-not-array' => $config->set('harbour.services', 'invalid'),
+            'service-object-key' => $config->set('harbour.services', ['search' => [123 => 'invalid']]),
+            'service-ports' => $config->set('harbour.services', ['search' => ['ports' => 'invalid']]),
+            'service-port-name' => $config->set('harbour.services', ['search' => ['ports' => [123 => ['range' => [8000, 8001]]]]]),
             'compose-not-array' => $config->set('harbour.compose', 'invalid'),
             'template-not-string' => $config->set('harbour.template', []),
             'template-missing' => $config->set('harbour.template', 'missing.env'),
@@ -60,8 +71,10 @@ final class WorkspaceLifecycleTest extends TestCase
     public static function invalidConfigurations(): iterable
     {
         foreach ([
-            'ports-not-array', 'port-definition', 'port-bounds', 'variable-value', 'resolver-contract',
-            'hook-argument', 'hook-shape', 'services-not-array', 'compose-not-array',
+            'ports-not-array', 'port-name', 'port-definition', 'port-bounds', 'project-name', 'provider',
+            'connection', 'sqlite-path', 'variable-value', 'variable-name', 'resolver-contract',
+            'hook-argument', 'hook-shape', 'hook-stage', 'hook-commands', 'services-not-array',
+            'service-object-key', 'service-ports', 'service-port-name', 'compose-not-array',
             'template-not-string', 'template-missing',
         ] as $case) {
             yield $case => [$case];
@@ -187,6 +200,113 @@ final class WorkspaceLifecycleTest extends TestCase
         $manager->teardown(true);
     }
 
+    #[DataProvider('implicitDatabaseConnections')]
+    public function test_database_connection_can_come_from_the_template_or_laravel_default(bool $fromTemplate): void
+    {
+        if (! extension_loaded('pdo_sqlite')) {
+            self::markTestSkipped('The pdo_sqlite extension is required.');
+        }
+        $config = $this->application()->make(Repository::class);
+        $config->set('harbour.database.enabled', true);
+        $config->set('harbour.database.connection', null);
+        $config->set('harbour.database.migrate', false);
+        if ($fromTemplate) {
+            file_put_contents($this->workspaceDirectory.'/.env.harbour', "DB_CONNECTION=sqlite\n");
+        }
+
+        $manager = $this->application()->make(WorkspaceManager::class);
+        $workspace = $manager->setup();
+
+        self::assertSame('sqlite', $config->get('database.default'));
+        $database = $workspace->database()?->metadata['database'] ?? null;
+        self::assertIsString($database);
+        self::assertFileExists($database);
+        $manager->teardown(true);
+    }
+
+    /** @return iterable<string, array{bool}> */
+    public static function implicitDatabaseConnections(): iterable
+    {
+        yield 'environment template' => [true];
+        yield 'Laravel default' => [false];
+    }
+
+    public function test_managed_postgresql_configuration_uses_allocations_and_a_stable_database_name(): void
+    {
+        file_put_contents($this->workspaceDirectory.'/.env.harbour', <<<'ENV'
+        DB_HOST=127.0.0.1
+        DB_PORT=${DB_PORT}
+        DB_USERNAME=harbour
+        DB_PASSWORD=harbour
+        ENV);
+        $config = $this->application()->make(Repository::class);
+        $config->set('harbour.installation.provider', 'compose');
+        $config->set('harbour.ports.allocations.DB_PORT', ['range' => [18800, 18820]]);
+        $config->set('harbour.database.enabled', true);
+        $config->set('harbour.database.connection', 'pgsql');
+        $config->set('harbour.database.migrate', false);
+        $config->set('database.connections.pgsql', ['driver' => 'pgsql']);
+        $sequence = new WorkspaceSetupSequence;
+        $this->application()->instance(DatabaseManager::class, new DatabaseManager([new OrderedDatabaseDriver($sequence, 'pgsql')]));
+
+        $manager = $this->application()->make(WorkspaceManager::class);
+        $workspace = $manager->setup();
+
+        self::assertNotNull($workspace->database());
+        self::assertSame('postgres', $sequence->configuration?->adminDatabase);
+        $manager->teardown(true);
+    }
+
+    #[DataProvider('invalidDatabaseResolutionCases')]
+    public function test_invalid_database_resolution_fails_before_driver_mutation(string $case): void
+    {
+        $config = $this->application()->make(Repository::class);
+        $config->set('harbour.database.enabled', true);
+        $config->set('harbour.database.migrate', false);
+        $originalDefault = $config->get('database.default');
+        switch ($case) {
+            case 'connection-object':
+                $config->set('harbour.database.connection', 'broken');
+                $config->set('database.connections.broken', 'invalid');
+                break;
+            case 'missing-allocation':
+                $config->set('harbour.installation.provider', 'compose');
+                file_put_contents($this->workspaceDirectory.'/.env.harbour', 'DB_PORT=${MISSING}'."\n");
+                break;
+            case 'embedded-variable':
+                $config->set('harbour.installation.provider', 'compose');
+                file_put_contents($this->workspaceDirectory.'/.env.harbour', 'DB_HOST=prefix-${MISSING}'."\n");
+                break;
+            case 'numeric-key':
+                $config->set('harbour.database.connection', 'sqlite');
+                $config->set('database.connections.sqlite', [0 => 'invalid', 'driver' => 'sqlite']);
+                break;
+            case 'default-not-string':
+                $config->set('harbour.database.connection', null);
+                $config->set('database.default', []);
+                break;
+            default:
+                throw new LogicException("Unknown database resolution case [{$case}].");
+        }
+
+        try {
+            $this->application()->make(WorkspaceManager::class)->setup();
+            self::fail('Invalid database resolution must fail setup.');
+        } catch (HarbourException $exception) {
+            self::assertSame(ErrorCode::InvalidConfiguration, $exception->errorCode);
+        } finally {
+            $config->set('database.default', $originalDefault);
+        }
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function invalidDatabaseResolutionCases(): iterable
+    {
+        foreach (['connection-object', 'missing-allocation', 'embedded-variable', 'numeric-key', 'default-not-string'] as $case) {
+            yield $case => [$case];
+        }
+    }
+
     public function test_ready_workspace_is_seeded_only_when_explicitly_requested(): void
     {
         $config = $this->application()->make(Repository::class);
@@ -210,6 +330,7 @@ final class WorkspaceLifecycleTest extends TestCase
     public function test_lifecycle_hooks_run_through_the_command_runner(): void
     {
         $this->application()->make(Repository::class)->set('harbour.hooks.before_setup', [['hook-command', '--safe']]);
+        $this->application()->make(Repository::class)->set('harbour.hooks.after_setup', ['echo safe']);
         $runner = new HookRecordingRunner;
         $this->application()->instance(CommandRunner::class, $runner);
 
@@ -217,6 +338,7 @@ final class WorkspaceLifecycleTest extends TestCase
         $manager->setup();
 
         self::assertContains(['hook-command', '--safe'], $runner->commands);
+        self::assertContains(['/bin/sh', '-c', 'echo safe'], $runner->commands);
         $manager->teardown(true);
     }
 
@@ -354,6 +476,8 @@ final class WorkspaceSetupSequence
 {
     /** @var list<string> */
     public array $events = [];
+
+    public ?DatabaseConfiguration $configuration = null;
 }
 
 final readonly class OrderedWorkspaceRunner implements CommandRunner
@@ -376,16 +500,17 @@ final readonly class OrderedWorkspaceRunner implements CommandRunner
 
 final readonly class OrderedDatabaseDriver implements DatabaseLifecycleDriver
 {
-    public function __construct(private WorkspaceSetupSequence $sequence) {}
+    public function __construct(private WorkspaceSetupSequence $sequence, private string $driver = 'sqlite') {}
 
     public function supports(string $driver): bool
     {
-        return $driver === 'sqlite';
+        return $driver === $this->driver;
     }
 
     public function create(OwnedResource $resource, string $workspacePath, DatabaseConfiguration $configuration): OwnedResource
     {
         $this->sequence->events[] = 'database';
+        $this->sequence->configuration = $configuration;
 
         return $resource;
     }

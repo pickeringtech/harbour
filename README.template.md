@@ -313,7 +313,9 @@ repeats cleanup after a deliberately failed setup.
 
 The quality gate also includes PostgreSQL, MySQL/MariaDB, SQLite, Redis, Docker,
 Compose, multi-process concurrency, failure injection, property/fuzz testing,
-strict Larastan, formatting, mutation testing, and a 95% coverage minimum.
+strict Larastan, formatting, mutation testing, and a 100% executable-statement
+coverage requirement enforced by the same `composer test` command locally and
+in CI.
 
 ## Documentation
 

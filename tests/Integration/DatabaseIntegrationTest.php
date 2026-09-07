@@ -65,6 +65,12 @@ final class DatabaseIntegrationTest extends TestCase
         try {
             self::assertFalse($driver->exists($resource, $configuration));
             try {
+                $driver->create($resource, sys_get_temp_dir(), $configuration);
+                self::fail('An existing unowned database must not be claimed.');
+            } catch (HarbourException) {
+                self::assertTrue($this->externalExists($admin, $configuration, $database));
+            }
+            try {
                 $driver->destroy($resource, $configuration, sys_get_temp_dir());
                 self::fail('An unowned database must not be dropped.');
             } catch (HarbourException) {
@@ -82,6 +88,28 @@ final class DatabaseIntegrationTest extends TestCase
         }
         [, $configuration] = $this->server('mysql');
         $driver = new MySqlDatabaseDriver(new FailingOwnershipMarker);
+        $hash = hash('sha256', bin2hex(random_bytes(8)));
+        $identity = new WorkspaceIdentity('ws_'.$hash, 'rollback-'.substr($hash, 0, 8), $hash, 'integration');
+        $database = 'harbour_rollback_'.substr($hash, 0, 12);
+        $resource = (new DatabaseManager([$driver]))->prepare($identity, $configuration, $database);
+
+        try {
+            $driver->create($resource, sys_get_temp_dir(), $configuration);
+            self::fail('Marker creation should fail.');
+        } catch (HarbourException) {
+            self::assertFalse($this->externalExists($this->admin($configuration), $configuration, $database));
+        } finally {
+            $this->dropExternal($this->admin($configuration), $configuration, $database);
+        }
+    }
+
+    public function test_postgresql_marker_failure_rolls_back_the_new_database(): void
+    {
+        if (getenv('HARBOUR_DATABASE_INTEGRATION') !== '1') {
+            self::markTestSkipped('Set HARBOUR_DATABASE_INTEGRATION=1 to mutate configured test database servers.');
+        }
+        [, $configuration] = $this->server('pgsql');
+        $driver = new PostgreSqlDatabaseDriver(new FailingOwnershipMarker);
         $hash = hash('sha256', bin2hex(random_bytes(8)));
         $identity = new WorkspaceIdentity('ws_'.$hash, 'rollback-'.substr($hash, 0, 8), $hash, 'integration');
         $database = 'harbour_rollback_'.substr($hash, 0, 12);

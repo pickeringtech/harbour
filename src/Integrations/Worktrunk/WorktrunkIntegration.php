@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PickeringTech\Harbour\Integrations\Worktrunk;
 
+use Closure;
 use JsonException;
 use PickeringTech\Harbour\Contracts\CommandRunner;
 use PickeringTech\Harbour\Exceptions\ErrorCode;
@@ -44,6 +45,7 @@ final readonly class WorktrunkIntegration
         private CommandRunner $runner,
         private AtomicFile $files = new AtomicFile,
         private string $binary = 'wt',
+        private ?Closure $temporaryFile = null,
     ) {}
 
     public function prepare(): WorktrunkInstallation
@@ -51,7 +53,7 @@ final readonly class WorktrunkIntegration
         $this->assertSupportedTool();
         $path = $this->configurationPath();
         $this->assertSafePath($path);
-        $existing = is_file($path) ? file_get_contents($path) : '';
+        $existing = is_file($path) ? @file_get_contents($path) : '';
         if ($existing === false) {
             throw new HarbourException(ErrorCode::UnsafeOperation, 'Unable to read Worktrunk project configuration.');
         }
@@ -84,7 +86,7 @@ final readonly class WorktrunkIntegration
         }
 
         $directory = dirname($this->configurationPath());
-        if (! is_dir($directory) && ! mkdir($directory, 0755, true) && ! is_dir($directory)) {
+        if (! is_dir($directory) && ! @mkdir($directory, 0755, true) && ! is_dir($directory)) {
             throw new HarbourException(ErrorCode::UnsafeOperation, 'Unable to create the Worktrunk project configuration directory.');
         }
         $this->files->write($this->configurationPath(), $installation->contents, 0644);
@@ -104,13 +106,13 @@ final readonly class WorktrunkIntegration
         } catch (HarbourException) {
             return new WorktrunkUninstallation('retained');
         }
-        $contents = file_get_contents($path);
+        $contents = @file_get_contents($path);
         if ($contents === false) {
             return new WorktrunkUninstallation('retained');
         }
         $managed = self::CONFIGURATION."\n";
         if ($contents === $managed) {
-            if (! unlink($path)) {
+            if (! @unlink($path)) {
                 throw new HarbourException(ErrorCode::UnsafeOperation, 'Unable to remove Harbour-managed Worktrunk project configuration.');
             }
 
@@ -231,8 +233,10 @@ final readonly class WorktrunkIntegration
 
     private function validateCandidate(string $contents): void
     {
-        $temporary = tempnam(sys_get_temp_dir(), 'harbour-wt-');
-        if ($temporary === false) {
+        $temporary = $this->temporaryFile === null
+            ? tempnam(sys_get_temp_dir(), 'harbour-wt-')
+            : ($this->temporaryFile)();
+        if (! is_string($temporary)) {
             throw new HarbourException(ErrorCode::UnsafeOperation, 'Unable to create a temporary Worktrunk validation file.');
         }
 

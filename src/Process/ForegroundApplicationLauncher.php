@@ -53,7 +53,7 @@ final readonly class ForegroundApplicationLauncher implements ApplicationLaunche
                 $running[] = $process;
             }
 
-            while ($running !== []) {
+            while (true) {
                 foreach ($running as $process) {
                     if (! $process->isRunning()) {
                         return $process->getExitCode() ?? 1;
@@ -68,7 +68,5 @@ final readonly class ForegroundApplicationLauncher implements ApplicationLaunche
                 }
             }
         }
-
-        return 0;
     }
 }

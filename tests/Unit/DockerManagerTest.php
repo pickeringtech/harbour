@@ -28,6 +28,7 @@ final class DockerManagerTest extends TestCase
             'environment' => ['MEILI_ENV' => 'development'],
             'command' => ['meilisearch', '--http-addr', '0.0.0.0:7700'],
         ], ['SEARCH_PORT' => 11900]);
+        self::assertEquals($resource, $manager->confirmCreated($resource));
 
         $runner->labels = [
             DockerManager::MANAGED_LABEL => 'true',

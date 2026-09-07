@@ -7,10 +7,14 @@ namespace PickeringTech\Harbour\Tests\Unit;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PickeringTech\Harbour\Contracts\CommandRunner;
 use PickeringTech\Harbour\Exceptions\HarbourException;
+use PickeringTech\Harbour\Identity\WorkspaceIdentity;
 use PickeringTech\Harbour\Process\ApplicationProcessPlan;
 use PickeringTech\Harbour\Process\ForegroundApplicationLauncher;
 use PickeringTech\Harbour\Process\ProcessResult;
+use PickeringTech\Harbour\State\WorkspaceState;
 use PickeringTech\Harbour\Tests\TestCase;
+use PickeringTech\Harbour\Variables\VariableBag;
+use PickeringTech\Harbour\Workspace;
 use PickeringTech\Harbour\WorkspaceManager;
 
 final class ApplicationProcessPlanTest extends TestCase
@@ -133,6 +137,85 @@ final class ApplicationProcessPlanTest extends TestCase
         } catch (HarbourException $exception) {
             self::assertStringContainsString('package.json', $exception->getMessage());
         }
+    }
+
+    public function test_it_rejects_missing_required_port_allocations_and_ignores_unsafe_or_irrelevant_node_manifests(): void
+    {
+        file_put_contents($this->workspaceDirectory.'/artisan', "<?php\n");
+        $emptyWorkspace = new Workspace(
+            WorkspaceState::begin(new WorkspaceIdentity('ws_test', 'test', str_repeat('a', 64), null), $this->workspaceDirectory),
+            new VariableBag,
+        );
+        $plan = new ApplicationProcessPlan($this->workspaceDirectory);
+
+        try {
+            $plan->processes($emptyWorkspace);
+            self::fail('Laravel launch requires APP_PORT.');
+        } catch (HarbourException $exception) {
+            self::assertStringContainsString('APP_PORT', $exception->getMessage());
+        }
+
+        $workspace = $this->application()->make(WorkspaceManager::class)->setup();
+        self::assertNull($plan->nodeCommands($workspace));
+        $outside = $this->workspaceDirectory.'/outside-package.json';
+        file_put_contents($outside, '{"scripts":{"dev":"vite"},"dependencies":{"vite":"^7"}}');
+        symlink($outside, $this->workspaceDirectory.'/package.json');
+        try {
+            $plan->nodeCommands($workspace);
+            self::fail('A symlinked Node manifest must be rejected.');
+        } catch (HarbourException $exception) {
+            self::assertStringContainsString('symbolic link', $exception->getMessage());
+        }
+        unlink($this->workspaceDirectory.'/package.json');
+
+        file_put_contents($this->workspaceDirectory.'/package.json', '{"scripts":{"dev":"echo no vite"},"dependencies":{"other":"^1"}}');
+        self::assertNull($plan->nodeCommands($workspace));
+
+        file_put_contents($this->workspaceDirectory.'/package.json', '{"scripts":{"dev":"vite"},"dependencies":{"vite":"^7"}}');
+        $withoutVitePort = new Workspace(
+            WorkspaceState::begin($workspace->identity(), $this->workspaceDirectory)->withAllocation('APP_PORT', 8000),
+            new VariableBag,
+        );
+        try {
+            $plan->nodeCommands($withoutVitePort);
+            self::fail('Vite launch requires VITE_PORT.');
+        } catch (HarbourException $exception) {
+            self::assertStringContainsString('VITE_PORT', $exception->getMessage());
+        }
+    }
+
+    public function test_foreground_process_output_is_named_and_remaining_processes_are_stopped(): void
+    {
+        file_put_contents($this->workspaceDirectory.'/artisan', "<?php fwrite(STDOUT, 'laravel ready'); sleep(10);\n");
+        file_put_contents($this->workspaceDirectory.'/package.json', '{"scripts":{"dev":"exit 7"},"dependencies":{"vite":"^7"}}');
+        mkdir($this->workspaceDirectory.'/node_modules/.bin', 0700, true);
+        file_put_contents($this->workspaceDirectory.'/node_modules/.bin/vite', '');
+        $workspace = $this->application()->make(WorkspaceManager::class)->setup();
+        $seen = [];
+
+        $exit = (new ForegroundApplicationLauncher(
+            $this->workspaceDirectory,
+            new ApplicationProcessPlan($this->workspaceDirectory),
+            new SuccessfulApplicationCommandRunner,
+        ))->launch($workspace, true, static function (string $name, string $buffer) use (&$seen): void {
+            $seen[$name] = ($seen[$name] ?? '').$buffer;
+        });
+
+        self::assertSame(1, $exit);
+        self::assertArrayHasKey('laravel', $seen);
+    }
+
+    public function test_node_installation_without_an_output_callback_still_launches(): void
+    {
+        file_put_contents($this->workspaceDirectory.'/artisan', "<?php exit(0);\n");
+        file_put_contents($this->workspaceDirectory.'/package.json', '{"scripts":{"dev":"vite"},"dependencies":{"vite":"^7"}}');
+        $workspace = $this->application()->make(WorkspaceManager::class)->setup();
+
+        self::assertSame(0, (new ForegroundApplicationLauncher(
+            $this->workspaceDirectory,
+            new ApplicationProcessPlan($this->workspaceDirectory),
+            new SuccessfulApplicationCommandRunner,
+        ))->launch($workspace));
     }
 }
 

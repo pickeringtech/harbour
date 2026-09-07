@@ -265,10 +265,8 @@ final class InstallCommand extends WorkspaceCommand
             if (confirm($question, true)) {
                 return new InstallationPlan($discovery, $this->confirmStart($discovery->selection, $start));
             }
-        } elseif ($mode === 'manual') {
-            $discovery = $detector->discover();
         } else {
-            throw new HarbourException(ErrorCode::InvalidInstallSelection, 'Choose auto-detection or manual component selection.');
+            $discovery = $detector->discover();
         }
 
         $databaseChoice = select(
@@ -517,11 +515,8 @@ final class InstallCommand extends WorkspaceCommand
         if ($value === null) {
             return null;
         }
-        if (! is_string($value)) {
-            throw new HarbourException(ErrorCode::InvalidInstallSelection, "The --{$name} option must be a string.");
-        }
 
-        return $value;
+        return is_scalar($value) ? (string) $value : null;
     }
 
     private function providerOption(): ?string
@@ -552,10 +547,6 @@ final class InstallCommand extends WorkspaceCommand
 
     private function choiceString(mixed $choice, string $group): string
     {
-        if (! is_string($choice)) {
-            throw new HarbourException(ErrorCode::InvalidInstallSelection, "The interactive {$group} choice must be a string.");
-        }
-
-        return strtolower($choice);
+        return strtolower(is_scalar($choice) ? (string) $choice : '');
     }
 }

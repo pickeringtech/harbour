@@ -7,7 +7,9 @@ namespace PickeringTech\Harbour\Tests\Integration;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Testing\PendingCommand;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PickeringTech\Harbour\Console\InstallCommand;
+use PickeringTech\Harbour\Console\WorkspaceCommand;
 use PickeringTech\Harbour\Contracts\ApplicationLauncher;
 use PickeringTech\Harbour\Contracts\CommandRunner;
 use PickeringTech\Harbour\Contracts\InstallationDependencyInstaller;
@@ -31,6 +33,7 @@ use PickeringTech\Harbour\Tests\TestCase;
 use PickeringTech\Harbour\Workspace;
 use PickeringTech\Harbour\WorkspaceManager;
 use RuntimeException;
+use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Tester\CommandTester;
 
 final class CommandIntegrationTest extends TestCase
@@ -43,6 +46,7 @@ final class CommandIntegrationTest extends TestCase
             '--cache' => 'redis',
             '--mail' => 'mailpit',
             '--with' => 'meilisearch,minio',
+            '--provider' => 'shared',
         ];
 
         self::assertSame(0, Artisan::call('workspace:install', $options));
@@ -61,7 +65,8 @@ final class CommandIntegrationTest extends TestCase
         self::assertStringContainsString('"database":"pgsql"', $output);
     }
 
-    public function test_install_command_guides_interactive_service_selection(): void
+    #[DataProvider('interactiveProviderChoices')]
+    public function test_install_command_guides_interactive_service_selection(?string $provider): void
     {
         unlink($this->workspaceDirectory.'/.env.harbour');
         file_put_contents($this->workspaceDirectory.'/composer.json', "{\n    \"name\": \"acme/app\"\n}\n");
@@ -69,18 +74,19 @@ final class CommandIntegrationTest extends TestCase
         $command = $this->application()->make(InstallCommand::class);
         $command->setLaravel($this->application());
         $tester = new CommandTester($command);
-        $tester->setInputs([
+        $inputs = [
             'Choose components manually',
             'PostgreSQL',
             'Redis',
             'Mailpit',
             'Meilisearch,Selenium',
-            'yes',
-            'no',
-            'no',
-        ]);
+        ];
+        if ($provider === null) {
+            $inputs[] = 'yes';
+        }
+        $tester->setInputs([...$inputs, 'no', 'no']);
 
-        self::assertSame(0, $tester->execute([]), $tester->getDisplay());
+        self::assertSame(0, $tester->execute($provider === null ? [] : ['--provider' => $provider]), $tester->getDisplay());
         self::assertStringNotContainsString('No external infrastructure configuration was detected.', $tester->getDisplay());
 
         $environment = (string) file_get_contents($this->workspaceDirectory.'/.env.harbour');
@@ -91,6 +97,13 @@ final class CommandIntegrationTest extends TestCase
         self::assertStringContainsString('DUSK_DRIVER_URL=', $environment);
         self::assertFileExists($this->workspaceDirectory.'/docker-compose.harbour.yml');
         self::assertStringContainsString('127.0.0.1:${DB_PORT}:5432', (string) file_get_contents($this->workspaceDirectory.'/docker-compose.harbour.yml'));
+    }
+
+    /** @return iterable<string, array{?string}> */
+    public static function interactiveProviderChoices(): iterable
+    {
+        yield 'prompted Compose provider' => [null];
+        yield 'explicit Compose provider' => ['compose'];
     }
 
     public function test_json_install_requires_explicit_non_interactive_choices(): void
@@ -415,6 +428,85 @@ final class CommandIntegrationTest extends TestCase
         self::assertStringContainsString('INVALID_INSTALL_SELECTION', Artisan::output());
     }
 
+    public function test_human_install_streams_startup_reports_script_conflicts_and_does_not_implicitly_launch(): void
+    {
+        unlink($this->workspaceDirectory.'/.env.harbour');
+        file_put_contents($this->workspaceDirectory.'/composer.json', json_encode([
+            'name' => 'acme/app',
+            'scripts' => ['workspace:setup' => ['custom setup']],
+        ], JSON_THROW_ON_ERROR));
+        $starter = new FakeInstalledWorkspaceStarter;
+        $launcher = new FakeInstalledApplicationLauncher;
+        $this->application()->instance(InstalledWorkspaceStarter::class, $starter);
+        $this->application()->instance(InstalledApplicationLauncher::class, $launcher);
+
+        self::assertSame(0, Artisan::call('workspace:install', [
+            '--database' => 'sqlite',
+            '--cache' => 'file',
+            '--mail' => 'log',
+            '--with' => 'none',
+            '--start' => true,
+            '--worktree-hooks' => 'none',
+            '--no-interaction' => true,
+        ]));
+
+        $output = Artisan::output();
+        self::assertStringContainsString('starting services', $output);
+        self::assertStringContainsString('never replaces a project-defined script', $output);
+        self::assertFalse($launcher->launched);
+    }
+
+    public function test_install_dependency_prompt_can_accept_decline_and_propagate_domain_failures(): void
+    {
+        foreach (['yes', 'no'] as $answer) {
+            if (is_file($this->workspaceDirectory.'/.env.harbour')) {
+                unlink($this->workspaceDirectory.'/.env.harbour');
+            }
+            file_put_contents($this->workspaceDirectory.'/composer.json', "{\n    \"name\": \"acme/app\"\n}\n");
+            $preflight = new RemediableInstallationPreflight;
+            $dependencies = new FakeInstallationDependencyInstaller($preflight);
+            $this->application()->instance(InstallationPreflight::class, $preflight);
+            $this->application()->instance(InstallationDependencyInstaller::class, $dependencies);
+            $command = $this->application()->make(InstallCommand::class);
+            $command->setLaravel($this->application());
+            $tester = new CommandTester($command);
+            $tester->setInputs([$answer]);
+            $exit = $tester->execute([
+                '--database' => 'sqlite', '--cache' => 'redis', '--mail' => 'log', '--with' => 'none',
+                '--worktree-hooks' => 'none',
+            ]);
+
+            self::assertSame($answer === 'yes' ? 0 : 1, $exit, $tester->getDisplay());
+            self::assertSame($answer === 'yes', $dependencies->installed);
+            if (is_file($this->workspaceDirectory.'/.env.harbour')) {
+                unlink($this->workspaceDirectory.'/.env.harbour');
+            }
+        }
+
+        file_put_contents($this->workspaceDirectory.'/composer.json', "{\n    \"name\": \"acme/app\"\n}\n");
+        $this->application()->instance(InstallationPreflight::class, new RemediableInstallationPreflight);
+        $this->application()->instance(InstallationDependencyInstaller::class, new DomainFailingInstallationDependencyInstaller);
+        self::assertSame(1, Artisan::call('workspace:install', [
+            '--database' => 'sqlite', '--cache' => 'redis', '--mail' => 'log', '--with' => 'none',
+            '--install-dependencies' => true, '--worktree-hooks' => 'none', '--json' => true,
+        ]));
+        self::assertStringContainsString('INVALID_INSTALL_SELECTION', Artisan::output());
+    }
+
+    public function test_conflicting_provider_and_empty_worktree_hook_options_are_rejected(): void
+    {
+        file_put_contents($this->workspaceDirectory.'/composer.json', "{\n    \"name\": \"acme/app\"\n}\n");
+        self::assertSame(1, Artisan::call('workspace:install', [
+            '--database' => 'pgsql', '--compose' => true, '--provider' => 'shared', '--json' => true,
+        ]));
+        self::assertStringContainsString('conflicts with --provider', Artisan::output());
+
+        self::assertSame(1, Artisan::call('workspace:install', [
+            '--database' => 'sqlite', '--worktree-hooks' => ' ', '--json' => true,
+        ]));
+        self::assertStringContainsString('comma-separated integration list', Artisan::output());
+    }
+
     public function test_commands_report_absent_workspace_and_structured_errors(): void
     {
         self::assertSame(0, Artisan::call('workspace:status'));
@@ -511,6 +603,7 @@ final class CommandIntegrationTest extends TestCase
         $output = Artisan::output();
         self::assertStringContainsString('Launching the application', $output);
         self::assertStringContainsString('Ctrl+C', $output);
+        self::assertStringContainsString("[laravel] one\n[laravel] two", $output);
     }
 
     public function test_fresh_setup_can_be_declined_interactively(): void
@@ -555,6 +648,30 @@ final class CommandIntegrationTest extends TestCase
         $teardown->expectsConfirmation('Tear down resources proven to be owned by this Harbour workspace?', 'no')->assertSuccessful();
         self::assertNotNull($manager->current());
         $manager->teardown(true);
+    }
+
+    public function test_uninstall_can_be_declined_interactively(): void
+    {
+        $this->application()->make(WorkspaceManager::class)->setup();
+
+        $uninstall = $this->artisan('workspace:uninstall');
+        self::assertInstanceOf(PendingCommand::class, $uninstall);
+        $uninstall->expectsConfirmation('Tear down this workspace and remove Harbour-managed project configuration?', 'no')->assertSuccessful();
+        self::assertNotNull($this->application()->make(WorkspaceManager::class)->current());
+        $this->application()->make(WorkspaceManager::class)->teardown(true);
+    }
+
+    public function test_setup_stream_option_forwards_managed_service_output(): void
+    {
+        file_put_contents($this->workspaceDirectory.'/compose.yml', "services: {}\n");
+        $this->application()->make(Repository::class)->set('harbour.compose', ['test' => ['file' => 'compose.yml']]);
+        $this->application()->instance(CommandRunner::class, new StreamingCommandRunner);
+        $this->application()->forgetInstance(ComposeManager::class);
+        $this->application()->forgetInstance(WorkspaceManager::class);
+
+        self::assertSame(0, Artisan::call('workspace:setup', ['--stream' => true]));
+        self::assertStringContainsString('compose progress', Artisan::output());
+        $this->application()->make(WorkspaceManager::class)->teardown(true);
     }
 
     public function test_uninstall_tears_down_before_removing_managed_project_policy(): void
@@ -678,6 +795,73 @@ final class CommandIntegrationTest extends TestCase
         self::assertStringContainsString('UNSAFE_OPERATION', $output);
         self::assertStringContainsString('identity exploded', $output);
     }
+
+    public function test_workspace_command_base_formats_optional_details_and_actionable_failures(): void
+    {
+        $command = new CoverageWorkspaceCommand;
+        $command->setLaravel($this->application());
+        $tester = new CommandTester($command);
+
+        self::assertSame(0, $tester->execute(['mode' => 'display']));
+        self::assertStringContainsString('probe-workspace', $tester->getDisplay());
+        self::assertStringContainsString('harbour-probe', $tester->getDisplay());
+        self::assertStringContainsString('VITE', $tester->getDisplay());
+
+        self::assertSame(1, $tester->execute(['mode' => 'requirements']));
+        self::assertStringContainsString('PHP extension redis', $tester->getDisplay());
+        self::assertStringContainsString('composer workspace:install', $tester->getDisplay());
+
+        self::assertSame(1, $tester->execute(
+            ['mode' => 'retry'],
+            ['verbosity' => OutputInterface::VERBOSITY_VERBOSE],
+        ));
+        self::assertStringContainsString('injected stderr', $tester->getDisplay());
+        self::assertStringContainsString('Retry without repeating', $tester->getDisplay());
+        self::assertStringContainsString('Error code:', $tester->getDisplay());
+    }
+}
+
+final class CoverageWorkspaceCommand extends WorkspaceCommand
+{
+    protected $signature = 'workspace:coverage-probe {mode}';
+
+    public function handle(): int
+    {
+        if ($this->argument('mode') === 'display') {
+            $this->displayWorkspace([
+                'slug' => 'probe-workspace',
+                'application_url' => 'http://127.0.0.1:8000',
+                'database' => 'probe_database',
+                'resources' => [
+                    'invalid',
+                    ['type' => 'compose_project', 'metadata' => ['project_name' => 'harbour-probe']],
+                ],
+                'ports' => ['APP_PORT' => 8000, 'VITE_PORT' => 5173, 0 => 'invalid'],
+            ]);
+
+            return self::SUCCESS;
+        }
+
+        if ($this->argument('mode') === 'requirements') {
+            return $this->executeSafely(false, static function (): int {
+                throw new HarbourException(ErrorCode::InstallRequirementsMissing, 'Requirements missing.', [
+                    'missing' => [
+                        'invalid',
+                        ['name' => 'incomplete'],
+                        ['name' => 'PHP extension redis', 'purpose' => 'cache', 'resolution' => 'install redis'],
+                    ],
+                    'retry_command' => 'composer workspace:install',
+                ]);
+            });
+        }
+
+        return $this->executeSafely(false, static function (): int {
+            throw new HarbourException(ErrorCode::ProcessFailed, 'Process failed.', [
+                'stderr' => 'injected stderr',
+                'retry_command' => 'composer workspace:install',
+            ]);
+        });
+    }
 }
 
 final class FakeInstalledWorkspaceStarter implements InstalledWorkspaceStarter
@@ -687,6 +871,9 @@ final class FakeInstalledWorkspaceStarter implements InstalledWorkspaceStarter
     public function start(?callable $output = null): string
     {
         $this->started = true;
+        if ($output !== null) {
+            $output('out', 'starting services');
+        }
 
         return '{"version":1,"ok":true,"workspace":{"slug":"test-workspace","application_url":"http://127.0.0.1:8123","status":"ready","ports":{"APP_PORT":8123},"resources":[{"type":"compose_project","metadata":{"project_name":"harbour-test-workspace"}}]}}';
     }
@@ -712,8 +899,11 @@ final class FakeApplicationLauncher implements ApplicationLauncher
     {
         $this->launched = true;
         $this->vite = $vite;
+        if ($output !== null) {
+            $output('laravel', "one\ntwo");
+        }
 
-        return 0;
+        return 130;
     }
 }
 
@@ -766,6 +956,14 @@ final class FailingInstallationDependencyInstaller implements InstallationDepend
     }
 }
 
+final class DomainFailingInstallationDependencyInstaller implements InstallationDependencyInstaller
+{
+    public function install(array $requirements, ?callable $output = null): void
+    {
+        throw new HarbourException(ErrorCode::InvalidInstallSelection, 'Injected domain failure.');
+    }
+}
+
 final class CommandFailureRunner implements CommandRunner
 {
     /**
@@ -786,6 +984,22 @@ final class SuccessfulCommandRunner implements CommandRunner
      */
     public function run(array $command, string $workingDirectory, array $environment = [], ?callable $output = null): ProcessResult
     {
+        return new ProcessResult(0, '');
+    }
+}
+
+final class StreamingCommandRunner implements CommandRunner
+{
+    public function run(array $command, string $workingDirectory, array $environment = [], ?callable $output = null): ProcessResult
+    {
+        if ($output !== null) {
+            $output('out', 'compose progress');
+        }
+
+        if (in_array('ps', $command, true)) {
+            return new ProcessResult(0, '');
+        }
+
         return new ProcessResult(0, '');
     }
 }

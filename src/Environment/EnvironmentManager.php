@@ -36,7 +36,7 @@ final readonly class EnvironmentManager
 
         $this->assertManagedPaths();
         $exists = is_file($this->environmentPath);
-        $contents = $exists ? file_get_contents($this->environmentPath) : '';
+        $contents = $exists ? @file_get_contents($this->environmentPath) : '';
 
         if ($contents === false) {
             throw new HarbourException(ErrorCode::UnsafeOperation, 'Unable to read the existing .env file.');

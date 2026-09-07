@@ -63,7 +63,7 @@ final readonly class ProjectInstaller
         $this->assertRegularOrMissing($target);
 
         if (is_file($target)) {
-            $existing = file_get_contents($target);
+            $existing = @file_get_contents($target);
             if ($existing === false) {
                 throw new HarbourException(ErrorCode::UnsafeOperation, "Unable to read existing project file [{$destination}].");
             }
@@ -94,7 +94,7 @@ final readonly class ProjectInstaller
     {
         $path = $this->target('.gitignore');
         $this->assertRegularOrMissing($path);
-        $contents = is_file($path) ? file_get_contents($path) : '';
+        $contents = is_file($path) ? @file_get_contents($path) : '';
         if ($contents === false) {
             throw new HarbourException(ErrorCode::UnsafeOperation, 'Unable to read the project .gitignore.');
         }
@@ -132,7 +132,7 @@ final readonly class ProjectInstaller
             throw new HarbourException(ErrorCode::InvalidConfiguration, 'Harbour must be installed from a Laravel project containing composer.json.');
         }
 
-        $contents = file_get_contents($path);
+        $contents = @file_get_contents($path);
         if ($contents === false) {
             throw new HarbourException(ErrorCode::UnsafeOperation, 'Unable to read composer.json.');
         }
@@ -220,9 +220,6 @@ final readonly class ProjectInstaller
 
         $trimmedEnd = rtrim($contents);
         $close = strlen($trimmedEnd) - 1;
-        if ($close < 0 || $trimmedEnd[$close] !== '}') {
-            throw new JsonException('Unable to locate composer.json root object.');
-        }
         $suffix = substr($contents, strlen($trimmedEnd));
         $body = substr($trimmedEnd, 1, $close - 1);
 
@@ -250,6 +247,7 @@ final readonly class ProjectInstaller
     {
         $depth = 0;
         $length = strlen($contents);
+        $open = null;
 
         for ($index = 0; $index < $length; $index++) {
             $character = $contents[$index];
@@ -294,10 +292,12 @@ final readonly class ProjectInstaller
                 // Find the start of the property value.
             }
 
-            return ($contents[$cursor] ?? null) === '{' ? $cursor : null;
+            $open = ($contents[$cursor] ?? null) === '{' ? $cursor : null;
+
+            break;
         }
 
-        return null;
+        return $open;
     }
 
     /** @param array<string, list<string>> $scripts */
@@ -320,6 +320,7 @@ final readonly class ProjectInstaller
         $inString = false;
         $escaped = false;
         $length = strlen($contents);
+        $close = $open;
 
         for ($index = $open; $index < $length; $index++) {
             $character = $contents[$index];
@@ -339,11 +340,13 @@ final readonly class ProjectInstaller
             } elseif ($character === '{') {
                 $depth++;
             } elseif ($character === '}' && --$depth === 0) {
-                return $index;
+                $close = $index;
+
+                break;
             }
         }
 
-        throw new JsonException('Unable to locate composer.json scripts object boundary.');
+        return $close;
     }
 
     private function target(string $relative): string
