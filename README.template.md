@@ -138,6 +138,10 @@ Auto-detection understands:
 Both the accepted auto-detect path and the manual path ask whether to set up the
 first workspace. The manual path can either connect Laravel to shared
 infrastructure or generate a workspace-managed `docker-compose.harbour.yml`.
+Installation separately asks whether to configure worktree lifecycle hooks.
+Choosing No is equivalent to `--worktree-hooks=none` and neither reads nor writes
+integration configuration. Choosing Worktrunk adds only its project-scoped,
+blocking setup and pre-removal hooks.
 After setup, the installer offers to launch Laravel and Vite as one attached
 development session. Press Ctrl+C to stop those application processes while
 leaving the selected infrastructure ready.
@@ -159,6 +163,12 @@ files and scripts are never replaced by default. `--reconfigure` replaces only
 files carrying Harbour's generated-file marker; project-authored files,
 `.gitignore`, and Composer scripts keep their non-destructive rules. Without
 that flag, the installer prints the exact protected paths to remove.
+
+With `--worktree-hooks=worktrunk`, Harbour also validates and writes the minimal
+project-scoped `.config/wt.toml`. It requires supported Worktrunk `0.76.x`,
+preserves unrelated TOML and comments, recognizes exact equivalent hooks, and
+refuses ambiguous lifecycle conflicts. See the
+[Worktrunk guide](https://pickeringtech.github.io/harbour/worktrunk/).
 
 Harbour reads Sail and Herd configuration; it does not silently start, rewrite,
 or take ownership of either tool. It configures native Laravel processes to use
@@ -183,6 +193,7 @@ php artisan workspace:install \
     --compose \
     --start \
     --install-dependencies \
+    --worktree-hooks=worktrunk \
     --no-interaction
 ```
 
@@ -312,6 +323,7 @@ strict Larastan, formatting, mutation testing, and a 95% coverage minimum.
 - [Databases](https://pickeringtech.github.io/harbour/databases/) and [Laravel state isolation](https://pickeringtech.github.io/harbour/laravel-state/) — databases, Redis, cache, sessions, queues, and Horizon
 - [Vite and Reverb](https://pickeringtech.github.io/harbour/vite-and-reverb/) — collision-free development processes
 - [Docker](https://pickeringtech.github.io/harbour/docker/) and [Docker Compose](https://pickeringtech.github.io/harbour/docker-compose/) — optional workspace resources
+- [Worktrunk](https://pickeringtech.github.io/harbour/worktrunk/) — first-class blocking create, merge, and remove lifecycle integration
 - [Orca](https://pickeringtech.github.io/harbour/orca/) and [Herdr](https://pickeringtech.github.io/harbour/herdr/) — copy/pasteable integration recipes
 - [Safety and resource ownership](https://pickeringtech.github.io/harbour/safety/) — why teardown is trustworthy
 - [Support matrix](https://pickeringtech.github.io/harbour/support-matrix/) — the automated evidence behind every selectable integration

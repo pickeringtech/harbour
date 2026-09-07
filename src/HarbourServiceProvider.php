@@ -48,6 +48,7 @@ use PickeringTech\Harbour\Installation\ProjectConfigurationDetector;
 use PickeringTech\Harbour\Installation\ProjectInstaller;
 use PickeringTech\Harbour\Installation\ProjectUninstaller;
 use PickeringTech\Harbour\Installation\SystemInstallationPreflight;
+use PickeringTech\Harbour\Integrations\Worktrunk\WorktrunkIntegration;
 use PickeringTech\Harbour\Lifecycle\DatabaseLifecycle;
 use PickeringTech\Harbour\Lifecycle\ManagedInfrastructure;
 use PickeringTech\Harbour\Lifecycle\SetupSequence;
@@ -108,6 +109,10 @@ final class HarbourServiceProvider extends ServiceProvider
         $this->app->singleton(EnvironmentManager::class, fn (Application $app): EnvironmentManager => new EnvironmentManager($this->workspacePath($app)));
         $this->app->singleton(ProjectInstaller::class, fn (Application $app): ProjectInstaller => new ProjectInstaller($this->workspacePath($app)));
         $this->app->singleton(ProjectUninstaller::class, fn (Application $app): ProjectUninstaller => new ProjectUninstaller($this->workspacePath($app)));
+        $this->app->singleton(WorktrunkIntegration::class, fn (Application $app): WorktrunkIntegration => new WorktrunkIntegration(
+            $this->workspacePath($app),
+            $app->make(CommandRunner::class),
+        ));
         $this->app->singleton(InstallationDependencyInstaller::class, fn (Application $app): InstallationDependencyInstaller => new ComposerDependencyInstaller(
             $this->workspacePath($app),
             $app->make(CommandRunner::class),

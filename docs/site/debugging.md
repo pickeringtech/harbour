@@ -8,6 +8,8 @@ php artisan workspace:status --json
 ```
 
 Status reads `.harbour.json`; it does not scan repositories or enumerate every Docker resource on the machine.
+When `.config/wt.toml` exists, the same response includes Worktrunk capability,
+version support, configured setup/teardown stages, and configuration conflicts.
 
 Inspect variable provenance:
 

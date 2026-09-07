@@ -38,6 +38,9 @@
             "soketi": { "level": "generation", "evidence": "Selection, Composer requirements, environment, and generated Compose validity are tested." }
         }
     },
+    "worktree_integrations": {
+        "worktrunk": { "level": "end-to-end", "evidence": "Pinned Worktrunk v0.76.0 validates generated TOML and exercises real creation, ordered setup, concurrent worktrees, blocking removal failure, successful removal, and merge-triggered pre-remove in CI." }
+    },
     "platforms": {
         "linux": { "level": "end-to-end", "evidence": "All GitHub Actions quality, service, Docker, worktree, install, and release smoke jobs run on Ubuntu." },
         "macos": { "level": "generation", "evidence": "The implementation retains macOS-compatible paths and commands; hosted end-to-end CI is not yet enabled." },

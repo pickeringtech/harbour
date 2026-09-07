@@ -77,6 +77,7 @@ final class CommandIntegrationTest extends TestCase
             'Meilisearch,Selenium',
             'yes',
             'no',
+            'no',
         ]);
 
         self::assertSame(0, $tester->execute([]), $tester->getDisplay());
@@ -250,7 +251,7 @@ final class CommandIntegrationTest extends TestCase
         $command = $this->application()->make(InstallCommand::class);
         $command->setLaravel($this->application());
         $tester = new CommandTester($command);
-        $tester->setInputs(['Auto-detect from this project', 'yes', 'no']);
+        $tester->setInputs(['Auto-detect from this project', 'yes', 'no', 'no']);
 
         self::assertSame(0, $tester->execute([]), $tester->getDisplay());
         self::assertStringContainsString('Harbour detected this project configuration.', $tester->getDisplay());
@@ -271,7 +272,7 @@ final class CommandIntegrationTest extends TestCase
         $command = $this->application()->make(InstallCommand::class);
         $command->setLaravel($this->application());
         $tester = new CommandTester($command);
-        $tester->setInputs(['Auto-detect from this project', 'yes', 'yes']);
+        $tester->setInputs(['Auto-detect from this project', 'yes', 'no', 'yes']);
 
         self::assertSame(0, $tester->execute(['--start' => true]), $tester->getDisplay());
         self::assertTrue($starter->started);

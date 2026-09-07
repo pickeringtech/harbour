@@ -58,6 +58,7 @@ Options:
 | `--start` | — | Run `workspace:setup` after files are installed and wait for managed services to become ready. |
 | `--launch` | — | Implies `--start`, then launches Laravel and Vite as an attached session. Incompatible with `--json`. |
 | `--install-dependencies` | — | Allow non-interactive installation of selected Composer integration packages. Interactive runs ask first. |
+| `--worktree-hooks` | `none`, `worktrunk` | Opt into project-scoped lifecycle hooks. `none` makes no integration changes and invokes no external tool. |
 | `--reconfigure` | — | Replace only files carrying Harbour's generated-file marker. Unmarked files, `.gitignore`, and Composer scripts remain protected. |
 | `--json` | — | Return the selected stack, discovery sources, and file changes using the stable JSON envelope. Use `--detect` or explicit selections. |
 
@@ -78,6 +79,12 @@ Conflicting choices—such as `--database=sqlite --with=mysql` or
 requires at least one service-backed component; a SQLite/file/log selection has
 nothing to containerize. Starting is a normal Harbour setup operation, so all
 port, ownership, state, and teardown guarantees still apply.
+
+Interactive runs separately ask whether to configure worktree lifecycle hooks.
+No is the default and is equivalent to `--worktree-hooks=none`. Yes currently
+offers Worktrunk as a full-lifecycle integration. An explicit Worktrunk choice
+requires supported `wt` `0.76.x`; Harbour validates the current and proposed
+TOML before changing project files and refuses custom or partial lifecycle hooks.
 
 ## `workspace:dev`
 
@@ -119,7 +126,9 @@ composer workspace:status
 php artisan workspace:status --json
 ```
 
-Purpose: inspect persisted workspace state quickly without scanning the machine or discovering unrelated Docker resources.
+Purpose: inspect persisted workspace state quickly without scanning the machine
+or discovering unrelated Docker resources. Status also reports Worktrunk's tool
+version, supported range, lifecycle capability, hook configuration, and conflicts.
 
 ## `workspace:env`
 
@@ -185,6 +194,10 @@ only files carrying Harbour's generated marker, the exact Harbour-owned
 files, modified ownership blocks, and project-authored aliases are retained and
 reported. Deliberate edits inside a still-marked generated policy file remain
 part of that policy and are removed with it.
+
+An exact Harbour-generated Worktrunk lifecycle block is removed while unrelated
+TOML stays in place. A modified block or project-authored equivalent is retained
+and reported for manual review.
 
 The package dependency is intentionally a separate, transparent final step:
 

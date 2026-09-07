@@ -29,6 +29,7 @@ const pages = [
     { route: 'support-matrix', source: 'docs/site/support-matrix.md', title: 'Support matrix', description: 'See exactly which integrations Harbour proves end-to-end, at runtime, or through configuration generation.' },
     { route: 'integrations', source: 'docs/site/integrations.md', title: 'Integrations', description: 'Use Harbour with Git worktrees, Orca, Herdr, Sail, Docker, and Compose.' },
     { route: 'orca', source: 'docs/site/orca.md', title: 'Orca', description: 'Connect Orca worktree lifecycle to Harbour workspace setup and teardown.' },
+    { route: 'worktrunk', source: 'docs/site/worktrunk.md', title: 'Worktrunk', description: 'Use Harbour through Worktrunk blocking setup and pre-removal lifecycle hooks.' },
     { route: 'herdr', source: 'docs/site/herdr.md', title: 'Herdr', description: 'Connect Herdr worktrees and services to Harbour safely.' },
     { route: 'safety', source: 'docs/site/safety.md', title: 'Safety', description: 'Harbour resource ownership, environment preservation, and production safeguards.' },
     { route: 'architecture', source: 'docs/site/architecture.md', title: 'Architecture', description: 'Harbour lifecycle, domain boundaries, and architectural decisions.' },

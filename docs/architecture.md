@@ -97,6 +97,12 @@ already removed, while mismatched ownership evidence is an error.
 teardown archival of a modified Harbour-rendered `.env`; it never bypasses
 resource, database, path, or Docker ownership guards.
 
+External lifecycle adapters must complete Harbour teardown before checkout
+deletion. The Worktrunk adapter uses blocking `pre-remove`, which runs inside the
+target checkout and propagates failure. Post-removal cleanup is forbidden because
+the `.harbour.json` ownership evidence is already gone. Harbour does not create,
+merge, or delete worktrees; see [ADR 0016](adr/0016-worktrunk-lifecycle-boundary.md).
+
 ## State and locking
 
 Workspace state is stored in `.harbour.json`, with schema version 1. Atomic

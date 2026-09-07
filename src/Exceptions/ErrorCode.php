@@ -20,5 +20,7 @@ enum ErrorCode: string
     case InstallSelectionRequired = 'HARBOUR_INSTALL_SELECTION_REQUIRED';
     case InvalidInstallSelection = 'HARBOUR_INVALID_INSTALL_SELECTION';
     case InstallRequirementsMissing = 'HARBOUR_INSTALL_REQUIREMENTS_MISSING';
+    case IntegrationUnavailable = 'HARBOUR_INTEGRATION_UNAVAILABLE';
+    case IntegrationConflict = 'HARBOUR_INTEGRATION_CONFLICT';
     case ProcessFailed = 'HARBOUR_PROCESS_FAILED';
 }
