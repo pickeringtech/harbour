@@ -54,6 +54,7 @@ final class ProjectInstallerTest extends TestCase
         self::assertSame(['@php artisan workspace:dev'], $scripts['workspace:dev']);
         self::assertSame(['@php artisan workspace:status'], $scripts['workspace:status']);
         self::assertSame(['@php artisan workspace:teardown'], $scripts['workspace:teardown']);
+        self::assertSame(['@php artisan workspace:uninstall'], $scripts['workspace:uninstall']);
 
         $second = $installer->install($selection);
         self::assertSame([], $second->created);

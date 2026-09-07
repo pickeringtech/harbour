@@ -6,6 +6,20 @@ All notable changes will be documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `workspace:uninstall` reverses adoption by tearing down owned resources,
+  restoring `.env`, and removing only provably Harbour-managed project policy.
+- Published-package smoke and previous-release upgrade jobs verify the package
+  outside the repository's local path-install test boundary.
+- A machine-checked support matrix now distinguishes end-to-end, real-runtime,
+  generation-only, and experimental integration evidence.
+
+### Fixed
+
+- Native Vite launch no longer exports an undeclared custom hot-file path,
+  keeping Laravel and Vite aligned on the worktree-local `public/hot` marker.
+
 ### Changed
 
 - The README now opens with a direct five-minute path from installation through

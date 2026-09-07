@@ -227,4 +227,19 @@ composer workspace:teardown -- --force
 
 Status is a fast operational summary. Debug shows non-secret variable provenance. Teardown removes only proven-owned resources and restores the original `.env`; `--force` skips the prompt without weakening safety checks.
 
+## Remove Harbour from a project
+
+Reverse the project-level installation in two explicit steps:
+
+```bash
+composer workspace:uninstall -- --force
+composer remove --dev pickeringtech/harbour
+```
+
+The first command tears down the current workspace and removes only policy
+files, ignore entries, and Composer aliases whose Harbour ownership can be
+proved. Unmarked replacement files, modified ownership blocks, and
+project-defined aliases are retained and reported for manual review. The second
+command removes the package dependency after its Artisan command has finished.
+
 Next, read [Workspaces](/workspaces/), [Environment templates](/environment-templates/), or [Vite and Reverb](/vite-and-reverb/).

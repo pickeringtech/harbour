@@ -243,10 +243,16 @@ safety.
 | `workspace:render` | Re-render `.env` from current state without clobbering hand edits. |
 | `workspace:debug` | Explain variable provenance while redacting secrets. |
 | `workspace:teardown` | Remove proven-owned resources and restore `.env`. |
+| `workspace:uninstall` | Tear down the workspace and remove only Harbour-managed project policy. |
 
 Commands intended for automation support stable JSON output and `HARBOUR_`-
 prefixed error codes. Non-interactive fresh setup and teardown require
 `--force`; that flag never weakens ownership checks.
+
+To remove Harbour later, run `composer workspace:uninstall -- --force`, then
+`composer remove --dev pickeringtech/harbour`. The first command removes only
+policy still carrying Harbour's generated marker and exact Composer aliases.
+Unmarked replacements and project-defined aliases are retained for review.
 
 Setup and render also checksum the current Harbour-rendered `.env`. If it was
 edited, move durable values into `.env.harbour` or pass `--force` to replace it.
@@ -280,10 +286,11 @@ REVERB_PORT=${REVERB_PORT}
 REVERB_SERVER_PORT=${REVERB_PORT}
 ```
 
-Laravel's default `public/hot` file is already local to each worktree, so normal
-Laravel Vite projects need no hot-file customization. `workspace:dev` passes
-the allocated strict port to Vite automatically. Advanced custom hot files are
-also supported without an `AppServiceProvider` edit.
+Laravel's default `public/hot` file is already local to each worktree, so Harbour
+keeps Laravel and Vite on that shared convention. Normal Laravel Vite projects
+need no hot-file customization. `workspace:dev` passes the allocated strict port
+to Vite automatically. Advanced custom hot files are also supported without an
+`AppServiceProvider` edit.
 
 ## Proven in real worktrees
 
@@ -307,6 +314,7 @@ strict Larastan, formatting, mutation testing, and a 95% coverage minimum.
 - [Docker](https://pickeringtech.github.io/harbour/docker/) and [Docker Compose](https://pickeringtech.github.io/harbour/docker-compose/) — optional workspace resources
 - [Orca](https://pickeringtech.github.io/harbour/orca/) and [Herdr](https://pickeringtech.github.io/harbour/herdr/) — copy/pasteable integration recipes
 - [Safety and resource ownership](https://pickeringtech.github.io/harbour/safety/) — why teardown is trustworthy
+- [Support matrix](https://pickeringtech.github.io/harbour/support-matrix/) — the automated evidence behind every selectable integration
 - [Architecture](https://pickeringtech.github.io/harbour/architecture/) — lifecycle and design decisions
 
 ## Requirements and non-goals

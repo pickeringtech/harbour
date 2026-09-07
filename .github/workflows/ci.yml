@@ -293,6 +293,38 @@ jobs:
           composer show laravel/scout --no-interaction
           composer show meilisearch/meilisearch-php --no-interaction
 
+  upgrade-compatibility:
+    name: Previous release upgrade
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite
+          coverage: none
+      - name: Resolve the latest tagged public release
+        id: previous
+        run: |
+          version=""
+          while IFS= read -r candidate; do
+            if git rev-parse --quiet --verify "refs/tags/${candidate}^{commit}" >/dev/null; then
+              version="${candidate}"
+              break
+            fi
+          done < <(php -r '$manifest = json_decode(file_get_contents("releases.json"), true, flags: JSON_THROW_ON_ERROR); foreach (array_reverse($manifest["releases"] ?? []) as $release) { echo ($release["version"] ?? ""), PHP_EOL; }')
+          [[ "${version}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+      - name: Upgrade a live workspace to the candidate
+        run: bash tools/upgrade-test.sh "${{ steps.previous.outputs.version }}" "${{ github.workspace }}"
+
   acceptance:
     name: Two-worktree acceptance
     runs-on: ubuntu-latest

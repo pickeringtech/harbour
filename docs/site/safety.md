@@ -33,6 +33,21 @@ Compose receives a collision-resistant project name. Harbour validates the recor
 
 Branch names, paths, configuration, and template values are treated as untrusted. SQL identifiers are quoted after validation, processes receive argument arrays, and managed paths are constrained to known roots.
 
+## Reversible project installation
+
+`workspace:uninstall` first performs the same ownership-checked workspace
+teardown, then removes only project policy that still carries Harbour's
+generated marker, its exact Composer aliases, and its intact `.gitignore`
+block. It does not infer ownership from a filename alone. Unmarked replacement
+files, custom Composer scripts, symlinks, modified ownership blocks, and
+pre-existing `.gitignore` lines are retained and identified for manual review.
+Edits deliberately made inside a still-marked generated policy file remain
+part of that policy and are removed with it.
+
+Package removal remains a separate, transparent Composer operation because an
+installed package cannot reliably remove itself while Composer is changing the
+dependency graph.
+
 ## Production protection
 
 Harbour is intended as a development dependency and is enabled by default only

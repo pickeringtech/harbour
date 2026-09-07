@@ -24,6 +24,7 @@ use PickeringTech\Harbour\Identity\WorkspaceIdentity;
 use PickeringTech\Harbour\Installation\InstallationRequirement;
 use PickeringTech\Harbour\Installation\InstallationRuntimeResolver;
 use PickeringTech\Harbour\Installation\InstallationSelection;
+use PickeringTech\Harbour\Installation\ProjectInstaller;
 use PickeringTech\Harbour\Installation\SystemInstallationPreflight;
 use PickeringTech\Harbour\Process\ProcessResult;
 use PickeringTech\Harbour\Tests\TestCase;
@@ -555,6 +556,43 @@ final class CommandIntegrationTest extends TestCase
         $manager->teardown(true);
     }
 
+    public function test_uninstall_tears_down_before_removing_managed_project_policy(): void
+    {
+        unlink($this->workspaceDirectory.'/.env.harbour');
+        file_put_contents($this->workspaceDirectory.'/composer.json', "{\n    \"name\": \"acme/app\"\n}\n");
+        (new ProjectInstaller($this->workspaceDirectory))->install(new InstallationSelection('none', 'file', 'log'));
+        $this->application()->make(WorkspaceManager::class)->setup();
+
+        self::assertSame(0, Artisan::call('workspace:uninstall', ['--force' => true, '--json' => true]));
+
+        $output = Artisan::output();
+        self::assertStringContainsString('"workspace":{"status":"absent"}', $output);
+        self::assertStringContainsString('".env.harbour"', $output);
+        self::assertFileDoesNotExist($this->workspaceDirectory.'/.harbour.json');
+        self::assertFileDoesNotExist($this->workspaceDirectory.'/.env.harbour');
+        self::assertSame("ORIGINAL=yes\n", file_get_contents($this->workspaceDirectory.'/.env'));
+    }
+
+    public function test_uninstall_reports_removed_and_retained_policy_in_human_output(): void
+    {
+        unlink($this->workspaceDirectory.'/.env.harbour');
+        file_put_contents($this->workspaceDirectory.'/composer.json', "{\n    \"name\": \"acme/app\"\n}\n");
+        (new ProjectInstaller($this->workspaceDirectory))->install(new InstallationSelection('none', 'file', 'log'));
+        $manifest = json_decode((string) file_get_contents($this->workspaceDirectory.'/composer.json'), true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($manifest);
+        self::assertIsArray($manifest['scripts'] ?? null);
+        $manifest['scripts']['workspace:status'] = ['project status'];
+        file_put_contents($this->workspaceDirectory.'/composer.json', json_encode($manifest, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR)."\n");
+
+        self::assertSame(0, Artisan::call('workspace:uninstall', ['--force' => true]));
+
+        $output = Artisan::output();
+        self::assertStringContainsString('managed project configuration removed', $output);
+        self::assertStringContainsString('Removed .env.harbour', $output);
+        self::assertStringContainsString('Retained composer.json scripts.workspace:status', $output);
+        self::assertStringContainsString('composer remove --dev pickeringtech/harbour', $output);
+    }
+
     public function test_non_interactive_destructive_commands_require_force(): void
     {
         $manager = $this->application()->make(WorkspaceManager::class);
@@ -567,6 +605,11 @@ final class CommandIntegrationTest extends TestCase
         self::assertSame(1, Artisan::call('workspace:teardown', ['--no-interaction' => true]));
         self::assertStringContainsString('--force', Artisan::output());
         self::assertNotNull($manager->current());
+
+        self::assertSame(1, Artisan::call('workspace:uninstall', ['--no-interaction' => true]));
+        self::assertStringContainsString('--force', Artisan::output());
+        self::assertNotNull($manager->current());
+        self::assertFileExists($this->workspaceDirectory.'/.env.harbour');
 
         $manager->teardown(true);
     }

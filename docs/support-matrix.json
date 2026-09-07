@@ -1,0 +1,46 @@
+{
+    "schema": 1,
+    "levels": {
+        "end-to-end": "Exercised through Harbour setup, use, and safe teardown against a real Laravel workspace or backing service in CI.",
+        "runtime": "The real backing service is started, connected to, and torn down in CI; the complete Laravel integration path is not yet exercised.",
+        "generation": "Selection, validation, environment rendering, and Compose syntax are tested; the real service is not launched in CI.",
+        "experimental": "The configuration contract is available, but automated real-service evidence is intentionally incomplete."
+    },
+    "selections": {
+        "database": {
+            "none": { "level": "end-to-end", "evidence": "Fresh Laravel and lifecycle suites run without a managed database." },
+            "sqlite": { "level": "end-to-end", "evidence": "Fresh Laravel install, workspace lifecycle, migrations, ownership, and teardown run in CI." },
+            "mysql": { "level": "end-to-end", "evidence": "A real MySQL server exercises database creation, ownership markers, idempotency, and teardown." },
+            "pgsql": { "level": "end-to-end", "evidence": "Real PostgreSQL lifecycle tests and the two-worktree acceptance test prove independent databases and teardown." },
+            "mariadb": { "level": "end-to-end", "evidence": "Generated Compose starts real MariaDB, creates an owned workspace database, retries setup, and tears down." },
+            "mongodb": { "level": "experimental", "evidence": "Connection-only environment and Compose configuration are tested; Harbour deliberately does not own MongoDB database lifecycle." }
+        },
+        "cache": {
+            "none": { "level": "end-to-end", "evidence": "Array-backed Laravel state is covered by lifecycle and fresh-install tests." },
+            "file": { "level": "end-to-end", "evidence": "File-backed Laravel state is covered by lifecycle and fresh-install tests." },
+            "database": { "level": "end-to-end", "evidence": "Laravel's default database-backed state is exercised by the fresh Laravel installation path." },
+            "redis": { "level": "end-to-end", "evidence": "Real Redis namespace isolation, generated Compose startup, repeated setup, and independent worktrees run in CI." },
+            "valkey": { "level": "generation", "evidence": "Selection, environment, dependency resolution, and generated Compose validity are tested." },
+            "memcached": { "level": "generation", "evidence": "Selection, environment, preflight, and generated Compose validity are tested." }
+        },
+        "mail": {
+            "none": { "level": "end-to-end", "evidence": "Array mail is covered by lifecycle tests." },
+            "log": { "level": "end-to-end", "evidence": "Log mail is used by fresh Laravel installation and acceptance paths." },
+            "mailpit": { "level": "runtime", "evidence": "Generated Compose starts real Mailpit, waits for health, exposes both ports, and tears it down." }
+        },
+        "additional": {
+            "meilisearch": { "level": "generation", "evidence": "Selection, Composer requirements, environment, and generated Compose validity are tested." },
+            "typesense": { "level": "generation", "evidence": "Selection, Composer requirements, environment, and generated Compose validity are tested." },
+            "minio": { "level": "generation", "evidence": "Selection, Composer requirements, environment, and generated Compose validity are tested." },
+            "rustfs": { "level": "generation", "evidence": "Selection, Composer requirements, environment, and generated Compose validity are tested." },
+            "rabbitmq": { "level": "generation", "evidence": "Selection, Composer requirements, environment, and generated Compose validity are tested." },
+            "selenium": { "level": "generation", "evidence": "Selection, Composer requirements, environment, and generated Compose validity are tested." },
+            "soketi": { "level": "generation", "evidence": "Selection, Composer requirements, environment, and generated Compose validity are tested." }
+        }
+    },
+    "platforms": {
+        "linux": { "level": "end-to-end", "evidence": "All GitHub Actions quality, service, Docker, worktree, install, and release smoke jobs run on Ubuntu." },
+        "macos": { "level": "generation", "evidence": "The implementation retains macOS-compatible paths and commands; hosted end-to-end CI is not yet enabled." },
+        "windows": { "level": "experimental", "evidence": "Compatibility is retained where practical, but Unix-oriented lifecycle behaviour is not validated on Windows." }
+    }
+}
