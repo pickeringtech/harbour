@@ -9,6 +9,7 @@ use PHPUnit\Framework\TestCase;
 use PickeringTech\Harbour\Contracts\CommandRunner;
 use PickeringTech\Harbour\Exceptions\ErrorCode;
 use PickeringTech\Harbour\Exceptions\HarbourException;
+use PickeringTech\Harbour\Integrations\Orca\OrcaInstallation;
 use PickeringTech\Harbour\Integrations\Orca\OrcaIntegration;
 use PickeringTech\Harbour\Process\ProcessResult;
 use RuntimeException;
@@ -57,6 +58,20 @@ final class OrcaIntegrationTest extends TestCase
         self::assertSame('orca worktree rm --worktree … --run-hooks', $status['removal_command']);
     }
 
+    public function test_install_validates_a_candidate_before_writing_it(): void
+    {
+        $integration = new OrcaIntegration($this->workspace, new FakeOrcaRunner);
+
+        try {
+            $integration->install(new OrcaInstallation("scripts:\n  setup: npm install\n", 'created'));
+            self::fail('Expected an invalid prepared candidate to be rejected.');
+        } catch (HarbourException $exception) {
+            self::assertSame(ErrorCode::InvalidConfiguration, $exception->errorCode);
+        }
+
+        self::assertFileDoesNotExist($this->workspace.'/orca.yaml');
+    }
+
     public function test_it_preserves_unrelated_yaml_and_comments_when_appending_scripts(): void
     {
         $original = $this->fixture('unrelated.yaml');
@@ -101,6 +116,17 @@ final class OrcaIntegrationTest extends TestCase
 
         self::assertStringContainsString('  setup: '.OrcaIntegration::SETUP."\r\n", $installation->contents);
         self::assertStringContainsString('  archive: '.OrcaIntegration::ARCHIVE."\r\nnext: value", $installation->contents);
+    }
+
+    public function test_it_completes_a_scripts_mapping_without_a_trailing_newline(): void
+    {
+        $original = 'scripts:'."\n".'  setup: '.OrcaIntegration::SETUP;
+        file_put_contents($this->workspace.'/orca.yaml', $original);
+
+        $installation = (new OrcaIntegration($this->workspace, new FakeOrcaRunner))->prepare();
+
+        self::assertStringContainsString(OrcaIntegration::SETUP."\n  ".'# Harbour Orca lifecycle integration.', $installation->contents);
+        self::assertStringContainsString('  archive: '.OrcaIntegration::ARCHIVE."\n", $installation->contents);
     }
 
     public function test_it_recognizes_equivalent_project_configuration_without_mutation(): void
@@ -254,6 +280,44 @@ final class OrcaIntegrationTest extends TestCase
         }
     }
 
+    public function test_unreadable_configuration_fails_closed_for_prepare_status_and_uninstall(): void
+    {
+        $path = $this->workspace.'/orca.yaml';
+        file_put_contents($path, $this->fixture('generated.yaml'));
+        chmod($path, 0000);
+        $integration = new OrcaIntegration($this->workspace, new FakeOrcaRunner);
+
+        try {
+            self::assertSame('retained', $integration->uninstall()->change);
+            try {
+                $integration->prepare();
+                self::fail('Unreadable configuration must fail preparation.');
+            } catch (HarbourException $exception) {
+                self::assertSame(ErrorCode::UnsafeOperation, $exception->errorCode);
+            }
+            self::assertSame('unsafe', $integration->status()['configuration']);
+        } finally {
+            chmod($path, 0600);
+        }
+    }
+
+    public function test_uninstall_reports_an_undeletable_managed_configuration(): void
+    {
+        $path = $this->workspace.'/orca.yaml';
+        file_put_contents($path, $this->fixture('generated.yaml'));
+        chmod($this->workspace, 0500);
+        $integration = new OrcaIntegration($this->workspace, new FakeOrcaRunner);
+
+        try {
+            $integration->uninstall();
+            self::fail('An undeletable managed configuration must fail uninstallation.');
+        } catch (HarbourException $exception) {
+            self::assertSame(ErrorCode::UnsafeOperation, $exception->errorCode);
+        } finally {
+            chmod($this->workspace, 0700);
+        }
+    }
+
     public function test_status_reports_absent_conflicting_invalid_and_unsupported_states(): void
     {
         $integration = new OrcaIntegration($this->workspace, new FakeOrcaRunner);
@@ -354,6 +418,9 @@ final class OrcaIntegrationTest extends TestCase
         self::assertFalse($integration->status()['tool']['available']);
 
         $runner->schemaOutput = '{"commands":{}}';
+        self::assertFalse($integration->status()['tool']['available']);
+
+        $runner->schemaOutput = '{"commands":[{"command":"worktree create","flags":["setup"]},false]}';
         self::assertFalse($integration->status()['tool']['available']);
 
         $runner->schemaOutput = null;

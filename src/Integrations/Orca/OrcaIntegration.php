@@ -99,8 +99,8 @@ final readonly class OrcaIntegration
             return;
         }
 
-        $this->files->write($this->configurationPath(), $installation->contents, 0644);
         $this->validateCandidate($installation->contents);
+        $this->files->write($this->configurationPath(), $installation->contents, 0644);
     }
 
     public function uninstall(): OrcaUninstallation
@@ -439,19 +439,13 @@ final readonly class OrcaIntegration
         }
 
         $scripts = $this->scripts($configuration);
-        $lines = preg_split('/(?<=\n)/', $existing);
-        if (! is_array($lines)) {
-            throw new HarbourException(ErrorCode::InvalidConfiguration, 'Unable to inspect Orca project configuration lines.');
-        }
-        $scriptsLine = null;
+        $lines = preg_split('/(?<=\n)/', $existing) ?: [$existing];
+        $scriptsLine = 0;
         foreach ($lines as $index => $line) {
             if (preg_match('/^scripts:[ \t]*(?:#.*)?(?:\r?\n)?$/', $line) === 1) {
                 $scriptsLine = $index;
                 break;
             }
-        }
-        if ($scriptsLine === null) {
-            throw new HarbourException(ErrorCode::InvalidConfiguration, 'Unable to locate the Orca scripts mapping safely.');
         }
         $insertAt = count($lines);
         for ($index = $scriptsLine + 1; $index < count($lines); $index++) {
