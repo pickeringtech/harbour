@@ -39,6 +39,7 @@
         }
     },
     "worktree_integrations": {
+        "orca": { "level": "experimental", "evidence": "The adapter and real-runtime probe are fail-closed: pinned Orca v1.4.197 deletes the checkout after archive-hook failure (stablyai/orca#19334), so no release currently meets Harbour's blocking teardown contract." },
         "worktrunk": { "level": "end-to-end", "evidence": "Pinned Worktrunk v0.76.0 validates generated TOML and exercises real creation, ordered setup, concurrent worktrees, blocking removal failure, successful removal, and merge-triggered pre-remove in CI." }
     },
     "platforms": {

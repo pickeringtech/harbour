@@ -1,0 +1,5 @@
+# Preserve this file byte-for-byte before the appended block.
+issueCommand: gh issue view {{issue}}
+defaultTabs:
+  - title: Shell
+    color: '#abc'

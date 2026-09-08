@@ -26,20 +26,28 @@ See the complete [Orca recipe](/orca/).
 
 **Orca owns the worktree. Harbour owns the Laravel environment.**
 
-Use this repository setup policy:
+Harbour has a fail-closed adapter for this repository lifecycle policy:
 
-```bash
-composer install --no-interaction && composer workspace:setup
+```yaml
+scripts:
+  setup: composer install --no-interaction && composer workspace:setup
+  archive: composer workspace:teardown -- --force
 ```
 
-Before Orca removes the worktree:
+Current Orca releases run archive hooks when CLI removal passes `--run-hooks`,
+but still delete the checkout after a hook fails. Harbour therefore rejects
+`--worktree-hooks=orca` before writing configuration. Track the upstream fix in
+[stablyai/orca#19334](https://github.com/stablyai/orca/issues/19334).
+
+Once a supported runtime exists, CLI removal will also need to request hooks
+explicitly until Orca provides a repository-default policy:
 
 ```bash
-composer workspace:teardown -- --force
-orca worktree rm --worktree active --force --json
+orca worktree rm --worktree active --run-hooks --json
 ```
 
-Harbour does not detect Orca or depend on it.
+Harbour detects Orca's machine-readable CLI/runtime capabilities but does not
+depend on Orca at runtime.
 
 ## Worktrunk
 

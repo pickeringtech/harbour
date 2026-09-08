@@ -1,0 +1,6 @@
+# Harbour Orca lifecycle integration.
+# Setup restores dependencies before Harbour creates the isolated environment.
+# Archive must succeed while the checkout and .harbour.json still exist.
+scripts:
+  setup: composer install --no-interaction && composer workspace:setup
+  archive: composer workspace:teardown -- --force

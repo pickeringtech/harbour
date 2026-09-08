@@ -60,11 +60,13 @@ applicable, demonstrates isolated use, and proves teardown.
 
 | Selection | Evidence | What CI proves |
 | --- | --- | --- |
+| Orca `1.4.x` | Experimental, disabled | Pinned Orca `1.4.197` loads generated YAML and runs setup/archive, but deletes the checkout after archive failure. The adapter fails closed pending [stablyai/orca#19334](https://github.com/stablyai/orca/issues/19334). |
 | Worktrunk `0.76.x` | End-to-end | The real pinned `wt` validator accepts generated TOML. Real Worktrunk creation orders Composer before setup, two worktrees retain independent ownership state, teardown failure blocks deletion, successful removal leaves the sibling intact, and merge invokes blocking pre-remove. |
 
-Worktrunk is the reference first-class headless adapter. Orca and Herdr remain
-documented manual recipes until their separate lifecycle contracts satisfy the
-same automated support gate.
+Worktrunk is the reference first-class headless adapter. Orca and Herdr are not
+first-class until their lifecycle contracts satisfy the same automated support
+gate. Orca CLI exposes `--run-hooks`, but that flag is not considered a blocking
+archive capability while hook failure still permits deletion.
 
 ## Providers and platforms
 

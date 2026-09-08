@@ -24,7 +24,8 @@
         "illuminate/events": "^13.0",
         "illuminate/filesystem": "^13.0",
         "illuminate/process": "^13.0",
-        "illuminate/support": "^13.0"
+        "illuminate/support": "^13.0",
+        "symfony/yaml": "^7.4 || ^8.0"
     },
     "require-dev": {
         "giorgiosironi/eris": "^1.1",
@@ -74,8 +75,9 @@
         "test:quick": "phpunit",
         "test:unit": "phpunit --testsuite=Unit",
         "test:integration": "phpunit --testsuite=Integration",
-        "fuzz": "phpunit tests/Unit/IdentifierPropertyTest.php tests/Unit/InstallationDiscoveryPropertyTest.php tests/Unit/WorktrunkConfigurationPropertyTest.php",
+        "fuzz": "phpunit tests/Unit/IdentifierPropertyTest.php tests/Unit/InstallationDiscoveryPropertyTest.php tests/Unit/OrcaConfigurationPropertyTest.php tests/Unit/WorktrunkConfigurationPropertyTest.php",
         "acceptance": "bash tools/acceptance-test.sh",
+        "probe:orca": "bash tools/orca-acceptance-test.sh",
         "acceptance:worktrunk": "bash tools/worktrunk-acceptance-test.sh",
         "coverage": "@test",
         "analyse": "phpstan analyse --memory-limit=1G",

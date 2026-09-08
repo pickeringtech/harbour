@@ -34,6 +34,14 @@ A while proving B remains operational, then repeats cleanup after a failing
 `after_setup` hook. The fixture also runs `workspace:install --detect` against
 a real Laravel application before committing its policy.
 
+`composer probe:orca` tests the ownership boundary through a real Orca runtime.
+It loads generated `orca.yaml`, creates two worktrees, runs ordered dependency
+installation and idempotent Harbour setup, and injects teardown failure before
+testing independent removal. Set `HARBOUR_ORCA_INTEGRATION=1` and
+`HARBOUR_ORCA_BINARY` to probe a candidate build. Pinned Orca `1.4.197` fails the
+required deletion guard, so this probe is deliberately not a green CI support
+claim; see [stablyai/orca#19334](https://github.com/stablyai/orca/issues/19334).
+
 The CI acceptance job uses PostgreSQL, phpredis, Redis, Docker, and Compose. A
 local run needs those services and extensions, or may deliberately substitute
 SQLite and Predis while retaining the same full-worktree lifecycle:

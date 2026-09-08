@@ -1,0 +1,3 @@
+scripts:
+  setup: npm install && composer workspace:setup
+  archive: rm -rf /tmp/workspace
