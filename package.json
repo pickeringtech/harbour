@@ -7,8 +7,8 @@
         "readme:check": "node tools/render-readme.mjs --check"
     },
     "devDependencies": {
-        "@mermaid-js/mermaid-cli": "11.17.0",
-        "marked": "^18.0.11"
+        "@mermaid-js/mermaid-cli": "12.0.0",
+        "marked": "^18.0.14"
     },
     "allowScripts": {
         "puppeteer@25.10.0": true
